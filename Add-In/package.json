@@ -1,0 +1,17 @@
+{
+  "name": "umbraco-connector-tooling",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "format": "prettier --write backend/src backend/tests eslint.config.js",
+    "format:check": "prettier --check backend/src backend/tests eslint.config.js"
+  },
+  "devDependencies": {
+    "eslint": "^10.14.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.14.0",
+    "prettier": "^3.9.10"
+  }
+}
