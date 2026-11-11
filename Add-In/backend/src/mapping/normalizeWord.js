@@ -1,5 +1,6 @@
 // @ts-check
-// Cleans Word HTML (from body.getHtml()) into the shared clean HTML format.
+// Cleans Word HTML into the shared clean HTML format.
+// Input is the MARKED text from Office.js getSelection().getHtml() - one call per filled field.
 // Pure functions: HTML string in, HTML string out. No network, no Express. Easy to unit test.
 // Needs (phase 4): npm install sanitize-html
 
@@ -7,8 +8,8 @@
  * normalizeWord(html)  (exported)
  *
  * The main function of this file. Runs the steps below in order and returns clean HTML
- * that extract.js can rely on. Google Docs gets its own normalizeGoogle.js later, which
- * must produce the SAME clean format, so extract.js and toUmbraco.js work for both.
+ * that htmlToValues.js and the converters in converters.js can rely on. Google Docs gets its own
+ * normalizeGoogle.js later, which must produce the SAME clean format.
  *
  * Clean format (target):
  *   - only these tags: h1-h6, p, strong, em, u, a, ul, ol, li, blockquote, br,
@@ -16,7 +17,10 @@
  *   - no class, style, lang or id attributes (except href on a, src/alt on img)
  *   - no empty paragraphs
  *
- * @param {string} html   raw HTML from Office.js body.getHtml()
+ * Selections can be small (one word) or start/end in the middle of a paragraph -
+ * the result must still be valid HTML (sanitize-html closes open tags).
+ *
+ * @param {string} html   raw HTML of the selection
  * @returns {string}      clean HTML
  */
 
@@ -25,7 +29,7 @@
  *
  * Removes things Word adds that are never content, BEFORE sanitising:
  *   - <!--[if ...]> ... <![endif]--> conditional comments and other comments
- *   - <style> and <meta> blocks, <o:p></o:p> and other namespaced tags (o:, w:, v:)
+ *   - <style>, <meta>, <html>/<head> wrappers, <o:p></o:p> and other namespaced tags (o:, w:, v:)
  *
  * @param {string} html
  * @returns {string}
@@ -38,8 +42,9 @@
  * Converts those to real tags so the information survives sanitising:
  *   - <p class="MsoTitle"> / class="MsoHeading1"  -> <h1>  (check real output first!)
  *   - <span style="font-weight:bold">             -> <strong>
- *   - <span style="font-style:italic">            -> <em>   (needed to find the teaser)
+ *   - <span style="font-style:italic">            -> <em>
  *   - <b> -> <strong>, <i> -> <em>
+ *   - Word lists (<p class="MsoListParagraph"> with bullet characters) -> <ul><li>
  * Look at real getHtml() output before writing this: save it as a test fixture.
  *
  * @param {string} html

@@ -24,7 +24,6 @@
  *   - clientId        UMBRACO_CLIENT_ID
  *   - clientSecret    UMBRACO_CLIENT_SECRET
  *   - allowedOrigin   ALLOWED_ORIGIN (the Word add-in, https://localhost:3000)
- *   - articleTypeId   Article document type GUID (optional: can also be looked up by alias)
  *
  * export const config = { ... };
  */

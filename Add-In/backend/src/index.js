@@ -7,10 +7,11 @@
  *
  * Builds and returns the Express app, without starting it:
  *   1. app.use(cors({ origin: config.allowedOrigin }))  - only the add-in may call us
- *   2. app.use(express.json({ limit: '5mb' }))         - Word HTML can be large
+ *   2. app.use(express.json({ limit: '5mb' }))         - Word HTML (several fields) can be large
  *   3. app.get('/api/health', ...)                     - returns { ok: true }, handy for testing
- *   4. app.use('/api/content', contentRouter)          - routes from routes/content.js
- *   5. errorHandler (see below) as the LAST middleware
+ *   4. app.use('/api/content', contentRouter)          - save routes (routes/content.js)
+ *   5. app.use('/api', metadataRouter)                 - dropdown data (routes/metadata.js)
+ *   6. errorHandler (see below) as the LAST middleware
  *
  * Keeping this separate from startServer() lets tests use the app (e.g. with supertest)
  * without opening a port. Can later be moved to its own app.js.
