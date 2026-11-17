@@ -120,7 +120,6 @@ export interface DocumentTypeTreeItem {
 // What GET /document-type/{id} returns (only what we use)
 interface DocumentTypeResponse {
   id: string;
-  compositions: Array<{ documentType: { id: string } }>;
   properties: Array<{
     alias: string;
     name: string;
@@ -292,41 +291,25 @@ export async function getDocumentTypes(): Promise<DocumentTypeTreeItem[]> {
   return result;
 }
 
-// Collects the fields of a document type, including fields from its compositions.
-// Use: called by getDocumentTypeProperties so no inherited field is missed.
-async function collectRawProperties(documentTypeId: string, visited: Set<string>): Promise<DocumentTypeResponse['properties']> {
-  if (visited.has(documentTypeId)) {
-    return [];
-  }
-  visited.add(documentTypeId);
-
-  const type = await request<DocumentTypeResponse>('GET', `/document-type/${documentTypeId}`);
-  const result = [...type.properties];
-
-  for (const composition of type.compositions) {
-    result.push(...(await collectRawProperties(composition.documentType.id, visited)));
-  }
-
-  return result;
-}
-
 // Cache for getDocumentTypeProperties: the pane and both save routes ask for the same type,
 // and document types rarely change. Key = document type id.
-const PROPERTIES_CACHE_MS = 60_000;
+const PROPERTIES_CACHE_MS = 120000;
 const propertiesCache = new Map<
-  string,
-  { expiresAt: number; properties: DocumentTypeProperty[] }
+  string,{ expiresAt: number; properties: DocumentTypeProperty[] } 
 >();
 
 // Lists the fields of a document type with their editor alias and settings (cached 1 min).
 // Use: fills the field dropdown, and tells the save route how to convert the marked text.
 export async function getDocumentTypeProperties(documentTypeId: string): Promise<DocumentTypeProperty[]> {
+  
   const cached = propertiesCache.get(documentTypeId);
   if (cached && Date.now() < cached.expiresAt) {
     return cached.properties;
   }
 
-  const rawProperties = await collectRawProperties(documentTypeId, new Set());
+  // The document type's own fields. Fields from compositions are not included.
+  const type = await request<DocumentTypeResponse>('GET', `/document-type/${documentTypeId}`);
+  const rawProperties = type.properties;
 
   // Fetch each data type once, even if several properties use it
   const dataTypeIds = new Set(

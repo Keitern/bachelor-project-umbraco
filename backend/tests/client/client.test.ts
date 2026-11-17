@@ -78,7 +78,6 @@ describe('getDocumentTypes', () => {
 
 describe('getDocumentTypeProperties', () => {
   it.todo('returns alias, name, mandatory, editorAlias and config for each field');
-  it.todo('includes fields from compositions');
   it.todo('fetches each data type only once, even if several fields use it');
   it.todo('uses the cache on a second call within 1 minute');
 });
