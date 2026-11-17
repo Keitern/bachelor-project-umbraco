@@ -1,115 +1,192 @@
+// Responsible for converting marked text into each data type's format (text, rich text, tags...).
+//
 // Converters: one function per supported data type. Each turns clean HTML (the marked text)
 // into the value format that data type expects. Pure functions: no network.
-// Signature of every converter: (cleanHtml, config) => value
 //
-// Supported data types (the 10 most relevant for writing articles / blog posts).
-// Formats marked (spike) were confirmed in Umbraco 18. The others: verify ONCE by filling the
-// field by hand in the backoffice and reading the node with GET /document/{id}.
+//  #  | Data type (backoffice)  | editorAlias                | Value sent to Umbraco         | Verified
+//  ---|-------------------------|----------------------------|-------------------------------|---------
+//  1  | Textstring              | Umbraco.TextBox            | 'plain text' (one line)       | spike
+//  2  | Textarea                | Umbraco.TextArea           | 'plain text\nwith lines'      | spike
+//  3  | Rich Text Editor        | Umbraco.RichText           | { markup, blocks: {...} }     | spike
+//  4  | Markdown Editor         | Umbraco.MarkdownEditor     | '## markdown string'          | no
+//  5  | Repeatable Textstrings  | Umbraco.MultipleTextstring | ['line 1', 'line 2']          | no
+//  6  | Tags                    | Umbraco.Tags               | ['tag1', 'tag2']              | no
+//  7  | Date Picker             | Umbraco.DateTime           | '2026-11-11 00:00:00'         | no
+//  8  | Numeric                 | Umbraco.Integer            | 42                            | no
+//  9  | Decimal                 | Umbraco.Decimal            | 4.2                           | no
+//  10 | Multi URL Picker        | Umbraco.MultiUrlPicker     | [{ name, url, type, ... }]    | no
 //
-//  #  | Data type (backoffice)  | editorAlias               | Value sent to Umbraco
-//  ---|-------------------------|---------------------------|-------------------------------------
-//  1  | Textstring              | Umbraco.TextBox           | 'plain text' (one line)   (spike)
-//  2  | Textarea                | Umbraco.TextArea          | 'plain text\nwith lines'  (spike)
-//  3  | Rich Text Editor        | Umbraco.RichText          | { markup, blocks: {...} } (spike)
-//  4  | Markdown Editor         | Umbraco.MarkdownEditor    | '# markdown string'  (needs turndown)
-//  5  | Repeatable Textstrings  | Umbraco.MultipleTextstring| ['line 1', 'line 2']
-//  6  | Tags                    | Umbraco.Tags              | ['tag1', 'tag2']
-//  7  | Date / Date Time        | Umbraco.DateTime (*)      | '2026-11-11 00:00:00' (check format)
-//  8  | Numeric / Decimal       | Umbraco.Integer / .Decimal| 42 / 4.2
-//  9  | Multi URL Picker        | Umbraco.MultiUrlPicker    | [{ name, url, target: null, ... }]
-//  10 | Media Picker (image)    | Umbraco.MediaPicker3      | [{ key, mediaKey }]  (phase 7, optional)
-//
-// (*) Newer Umbraco versions also have separate date editors (date only, date + time).
-//     Check which editorAlias your Date Picker data type uses.
+// "no" = verify ONCE before relying on it: fill such a field by hand in the backoffice and read
+// the node with GET /document/{id} to see the exact format. Media Picker is left out (needs an
+// image upload first).
 
-/**
- * SUPPORTED_EDITORS (exported constant, not a function)
- *
- * Object that maps each editorAlias from the table above to its converter function in this file:
- *   { 'Umbraco.TextBox': toTextstring, 'Umbraco.RichText': toRichText, ... }
- * Adding a new data type later = write one converter and add one line here.
- */
+import TurndownService from 'turndown';
+import { httpError } from '../httpError.ts';
+import { extractLinks, toLines, toPlainText } from './htmlToValues.ts';
+import type { DocumentTypeProperty } from '../umbraco/client.ts';
 
-/**
- * isSupportedEditor(editorAlias)  (exported)
- *
- * true if editorAlias is a key in SUPPORTED_EDITORS. Used by routes/metadata.ts so the
- * task pane can grey out fields that cannot be filled from text.
- *
- * @param {string} editorAlias
- * @returns {boolean}
- */
+// Data type settings from Umbraco, e.g. [{ alias: 'maxChars', value: 100 }]
+type DataTypeConfig = DocumentTypeProperty['config'];
 
-/**
- * toTextstring(cleanHtml)
- *
- * toPlainText(cleanHtml) (htmlToValues.ts) with line breaks replaced by spaces.
- * If the data type config has a maxChars setting, throw 400 when the text is too long
- * (better than cutting it off silently).
- */
+// Every converter: clean HTML (+ the data type's settings) in, Umbraco value out.
+export type Converter = (cleanHtml: string, config: DataTypeConfig) => unknown;
 
-/**
- * toTextarea(cleanHtml)
- *
- * toPlainText(cleanHtml) - keeps line breaks between paragraphs.
- */
+// Reads one numeric setting from the data type config, e.g. maxChars. undefined if not set.
+function numberSetting(config: DataTypeConfig, alias: string): number | undefined {
+  const setting = config.find((c) => {
+    return c.alias === alias;
+  });
+  return typeof setting?.value === 'number' ? setting.value : undefined;
+}
 
-/**
- * toRichText(cleanHtml)
- *
- * Wraps the HTML in the Umbraco 18 rich text format. `blocks` must be this full empty
- * structure, NOT null (found in the spike):
- *   { markup: cleanHtml, blocks: { layout: {}, contentData: [], settingsData: [], expose: [] } }
- */
+// Throws 400 when the text is longer than the data type allows (instead of cutting it off).
+function checkMaxChars(text: string, config: DataTypeConfig): void {
+  const maxChars = numberSetting(config, 'maxChars');
+  if (maxChars !== undefined && maxChars > 0 && text.length > maxChars) {
+    throw httpError(
+      400,
+      `The marked text is ${text.length} characters, the field allows ${maxChars}`
+    );
+  }
+}
 
-/**
- * toMarkdown(cleanHtml)
- *
- * Converts HTML to Markdown, e.g. with the `turndown` package (npm install turndown):
- *   '<h2>Intro</h2><p><strong>Hi</strong></p>' -> '## Intro\n\n**Hi**'
- */
+// Textstring: plain text on ONE line (line breaks become spaces).
+function toTextstring(cleanHtml: string, config: DataTypeConfig): string {
+  const text = toPlainText(cleanHtml).replace(/\n/g, ' ');
+  checkMaxChars(text, config);
+  return text;
+}
 
-/**
- * toRepeatableTextstrings(cleanHtml)
- *
- * toLines(cleanHtml) (htmlToValues.ts) -> ['line 1', 'line 2'].
- */
+// Textarea: plain text, keeps the line breaks between paragraphs.
+function toTextarea(cleanHtml: string, config: DataTypeConfig): string {
+  const text = toPlainText(cleanHtml);
+  checkMaxChars(text, config);
+  return text;
+}
 
-/**
- * toTags(cleanHtml)
- *
- * toPlainText, split on commas and line breaks, trim, drop empty and duplicate tags
- * -> ['umbraco', 'word', 'cms'].
- */
+// Rich text: the HTML itself, wrapped in Umbraco 18's rich text format.
+// `blocks` must be this full empty structure, not null (found in the spike).
+function toRichText(cleanHtml: string): { markup: string; blocks: object } {
+  return {
+    markup: cleanHtml,
+    blocks: { layout: {}, contentData: [], settingsData: [], expose: [] }
+  };
+}
 
-/**
- * toDate(cleanHtml)
- *
- * toPlainText, then parse it as a date. Accept at least '2026-11-11' and '11-11-2026'.
- * Throw 400 "Could not read a date from the marked text" if parsing fails.
- * Return the string format Umbraco expects (check by reading a node with a date set).
- */
+// Markdown: HTML converted to Markdown, e.g. <h2>Intro</h2> -> '## Intro'.
+const turndown = new TurndownService({ headingStyle: 'atx', bulletListMarker: '-' });
+function toMarkdown(cleanHtml: string): string {
+  return turndown.turndown(cleanHtml);
+}
 
-/**
- * toNumber(cleanHtml)
- *
- * toPlainText, accept both '4.2' and '4,2', Number(...). Throw 400 if it is not a number.
- * Integer editor: also throw if it has decimals.
- */
+// Repeatable textstrings: one entry per paragraph / list item.
+function toRepeatableTextstrings(cleanHtml: string): string[] {
+  return toLines(cleanHtml);
+}
 
-/**
- * toUrlPicker(cleanHtml)
- *
- * extractLinks(cleanHtml) (htmlToValues.ts) mapped to Umbraco's link objects:
- *   [{ name, url, target: null, type: 'external', unique: null, icon: null, published: true,
- *      queryString: null }]   - verify the exact keys by reading a node with a link set.
- * Throw 400 if the selection contains no links.
- */
+// Tags: text split on commas and line breaks, trimmed, without empty or duplicate tags.
+function toTags(cleanHtml: string): string[] {
+  const tags = toPlainText(cleanHtml)
+    .split(/[,\n]/)
+    .map((tag) => {
+      return tag.trim();
+    })
+    .filter((tag) => {
+      return tag !== '';
+    });
+  return [...new Set(tags)];
+}
 
-/**
- * toMediaPicker(cleanHtml)   (phase 7, optional - needs an upload, so it is async)
- *
- * extractImages -> client.uploadImage for the first image -> [{ key: randomUUID(), mediaKey }].
- * Because this needs the network, it breaks the "pure functions" rule of this file: call the
- * upload from the route first, or leave this data type out if time is short.
- */
+// Date: accepts 2026-11-17, 17-11-2026, 17/11/2026 and 17.11.2026.
+// Parsed by hand (not new Date(...)) so time zones can't shift the day.
+function toDate(cleanHtml: string): string {
+  const text = toPlainText(cleanHtml).trim();
+  const yearFirst = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
+  const dayFirst = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/.exec(text);
+
+  let year: number;
+  let month: number;
+  let day: number;
+  if (yearFirst) {
+    [year, month, day] = [Number(yearFirst[1]), Number(yearFirst[2]), Number(yearFirst[3])];
+  } else if (dayFirst) {
+    [day, month, year] = [Number(dayFirst[1]), Number(dayFirst[2]), Number(dayFirst[3])];
+  } else {
+    throw httpError(400, `Could not read a date from the marked text: "${text}"`);
+  }
+
+  // Rejects impossible dates like 31-02-2026
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() !== month - 1 ||
+    check.getUTCDate() !== day
+  ) {
+    throw httpError(400, `"${text}" is not a valid date`);
+  }
+
+  const pad = (n: number): string => {
+    return String(n).padStart(2, '0');
+  };
+  return `${year}-${pad(month)}-${pad(day)} 00:00:00`;
+}
+
+// Number: accepts both 4.2 and 4,2. Throws 400 if the text is not a number.
+function toNumber(cleanHtml: string): number {
+  const text = toPlainText(cleanHtml).trim().replace(/\s/g, '').replace(',', '.');
+  const number = Number(text);
+  if (text === '' || Number.isNaN(number)) {
+    throw httpError(400, `Could not read a number from the marked text: "${text}"`);
+  }
+  return number;
+}
+
+// Numeric (whole numbers only).
+function toInteger(cleanHtml: string): number {
+  const number = toNumber(cleanHtml);
+  if (!Number.isInteger(number)) {
+    throw httpError(400, `The field needs a whole number, got ${number}`);
+  }
+  return number;
+}
+
+// Multi URL picker: every link in the selection becomes an external link.
+function toUrlPicker(cleanHtml: string): object[] {
+  const links = extractLinks(cleanHtml);
+  if (links.length === 0) {
+    throw httpError(400, 'The marked text contains no links');
+  }
+  return links.map((link) => {
+    return {
+      name: link.name,
+      url: link.url,
+      type: 'external',
+      target: null,
+      unique: null,
+      queryString: null,
+      icon: null,
+      published: true,
+      trashed: false
+    };
+  });
+}
+
+// Which converter to use for which data type. Adding a data type = write a converter + one line.
+export const SUPPORTED_EDITORS: Record<string, Converter> = {
+  'Umbraco.TextBox': toTextstring,
+  'Umbraco.TextArea': toTextarea,
+  'Umbraco.RichText': toRichText,
+  'Umbraco.MarkdownEditor': toMarkdown,
+  'Umbraco.MultipleTextstring': toRepeatableTextstrings,
+  'Umbraco.Tags': toTags,
+  'Umbraco.DateTime': toDate,
+  'Umbraco.Integer': toInteger,
+  'Umbraco.Decimal': toNumber,
+  'Umbraco.MultiUrlPicker': toUrlPicker
+};
+
+// true if we can fill this kind of field from marked text.
+// Use: routes/metadata.ts, so the task pane can grey out fields we can't fill.
+export function isSupportedEditor(editorAlias: string): boolean {
+  return editorAlias in SUPPORTED_EDITORS;
+}

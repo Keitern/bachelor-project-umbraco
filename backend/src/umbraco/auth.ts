@@ -1,3 +1,5 @@
+// Responsible for logging the backend in to Umbraco as the API user (getting and caching tokens).
+//
 // Henter token fra management API (apibase = management API) og cacher den, 
 // hjælper backend med at med at forblive logget ind som API user
 import { config } from '../config.ts';

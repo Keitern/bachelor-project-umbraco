@@ -1,3 +1,5 @@
+// Responsible for all communication with Umbraco: reading, creating, updating and publishing.
+//
 // Management API calls. The ONLY file that talks to Umbraco's endpoints (besides auth.ts).
 // Code to start from: steps 2-4 in spike/spike.mjs.
 // Verify every path and body in Swagger: {UMBRACO_URL}/umbraco/openapi/index.html
@@ -108,8 +110,7 @@ interface DocumentTreeItem {
 }
 
 // Item in GET /tree/document-type/root and /tree/document-type/children
-export interface DocumentTypeTreeItem {
-  id: string;
+export interface DocumentTypeTreeItem {id: string;
   name: string;
   icon: string;
   isElement: boolean;
@@ -130,7 +131,7 @@ interface DocumentTypeResponse {
 
 // What GET /data-type/{id} returns (only what we use)
 interface DataTypeResponse {
-  id: string;
+id: string;
   editorAlias: string;
   values: Array<{ alias: string; value: unknown }>;
 }
@@ -307,21 +308,24 @@ export async function getDocumentTypeProperties(documentTypeId: string): Promise
     return cached.properties;
   }
 
-  // The document type's own fields. Fields from compositions are not included.
+  // The document type's own fields. Find the ID of each field's data type.
   const type = await request<DocumentTypeResponse>('GET', `/document-type/${documentTypeId}`);
   const rawProperties = type.properties;
 
-  // Fetch each data type once, even if several properties use it
+  // Fetch each data type once based on its ID
+  // .map collects the IDs
   const dataTypeIds = new Set(
     rawProperties.map((p) => {
       return p.dataType.id;
     })
   );
+  // new Set removes duplicates
   const dataTypes = new Map<string, DataTypeResponse>();
   for (const dataTypeId of dataTypeIds) {
     dataTypes.set(dataTypeId, await request<DataTypeResponse>('GET', `/data-type/${dataTypeId}`));
   }
 
+  // Build the final list of properties with their alias and config values
   const properties = rawProperties.map((p) => {
     const dataType = dataTypes.get(p.dataType.id);
     return {
@@ -333,6 +337,7 @@ export async function getDocumentTypeProperties(documentTypeId: string): Promise
     };
   });
 
+  // Cache the result for a while, so the next call does not hit Umbraco again
   propertiesCache.set(documentTypeId, { expiresAt: Date.now() + PROPERTIES_CACHE_MS, properties });
   return properties;
 }

@@ -1,3 +1,5 @@
+// Responsible for the backend settings (Umbraco address, API user, port, allowed add-in).
+//
 // Reads and validates environment variables. 
 // Every other file imports config from here instead of reading process.env directly, so all settings live in one place.
 

@@ -1,53 +1,75 @@
-// Pulls specific kinds of content out of the (clean) marked HTML: plain text, lines, links,
-// list items, images. Used by converters.ts to build values for fields that are NOT rich text.
+// Responsible for reading plain text, lines, links and images out of HTML.
 //
-// Note: in the chosen workflow the USER decides which marked text goes to which field
-// (structure mapping is done in the task pane). This file no longer guesses title/teaser;
-// it only answers "what does this piece of HTML contain".
-//
-// Pure functions: HTML string in, data out. Needs (phase 4): npm install cheerio
+// Pulls specific kinds of content out of clean HTML (the marked text after normalizeWord):
+// plain text, lines, links, images. Used by converters.ts for fields that are NOT rich text.
+// Pure functions: HTML string in, data out.
 
-/**
- * toPlainText(cleanHtml)  (exported)
- *
- * Returns the text without any tags, for Textstring / Textarea and similar fields:
- *   - text of all elements, entities decoded (&amp; -> &)
- *   - block elements (p, h1-h6, li, br) become line breaks '\n'
- *   - repeated whitespace collapsed, result trimmed
- * Example: '<h1>My <em>title</em></h1>' -> 'My title'
- *
- * @param {string} cleanHtml
- * @returns {string}
- */
+import * as cheerio from 'cheerio';
 
-/**
- * toLines(cleanHtml)  (exported)
- *
- * Splits the marked text into separate, non-empty lines, one per paragraph / list item / <br>.
- * Used for list-like fields: Repeatable textstrings, Tags.
- * Example: '<ul><li>One</li><li>Two</li></ul>' -> ['One', 'Two']
- *
- * @param {string} cleanHtml
- * @returns {string[]}
- */
+// Elements that start a new line in plain text
+const BLOCK_ELEMENTS = 'p, div, h1, h2, h3, h4, h5, h6, li, blockquote, tr';
 
-/**
- * extractLinks(cleanHtml)  (exported)
- *
- * Returns every <a href> in the selection, for the Multi URL Picker field:
- *   [{ name: link text, url: href }]
- * Skips links without href and javascript: links.
- *
- * @param {string} cleanHtml
- * @returns {Array<{ name: string, url: string }>}
- */
+// Returns the text without tags. Paragraphs, headings, list items and <br> become line breaks,
+// entities are decoded (&amp; -> &), spaces are collapsed and empty lines removed.
+// Use: Textstring, Textarea, Tags, Date and Number fields.
+export function toPlainText(cleanHtml: string): string {
+  const $ = cheerio.load(cleanHtml, null, false);
 
-/**
- * extractImages(cleanHtml)  (exported, phase 7, optional)
- *
- * Returns the src of every <img> in the selection (Word usually gives base64 data URIs),
- * for the Media Picker field. Upload happens in client.uploadImage.
- *
- * @param {string} cleanHtml
- * @returns {string[]}
- */
+  $('br').replaceWith('\n');
+  $(BLOCK_ELEMENTS).each((_, element) => {
+    $(element).append('\n');
+  });
+
+  return $.root()
+    .text()
+    .replace(/ /g, ' ') // &nbsp; -> normal space
+    .split('\n')
+    .map((line) => {
+      return line.replace(/\s+/g, ' ').trim();
+    })
+    .filter((line) => {
+      return line !== '';
+    })
+    .join('\n');
+}
+
+// Splits the text into separate non-empty lines: one per paragraph, list item or <br>.
+// Use: list-like fields (Repeatable textstrings).
+export function toLines(cleanHtml: string): string[] {
+  const text = toPlainText(cleanHtml);
+  return text === '' ? [] : text.split('\n');
+}
+
+// Returns every link in the selection as { name, url }. Skips javascript: links.
+// Use: the Multi URL Picker field.
+export function extractLinks(cleanHtml: string): Array<{ name: string; url: string }> {
+  const $ = cheerio.load(cleanHtml, null, false);
+  const links: Array<{ name: string; url: string }> = [];
+
+  $('a[href]').each((_, element) => {
+    const url = ($(element).attr('href') ?? '').trim();
+    if (url === '' || url.toLowerCase().startsWith('javascript:')) {
+      return;
+    }
+    const name = $(element).text().replace(/\s+/g, ' ').trim();
+    links.push({ name: name || url, url });
+  });
+
+  return links;
+}
+
+// Returns the src of every image in the selection (Word usually gives base64 data URIs).
+// Use: a Media Picker field (phase 7, optional - not wired up yet).
+export function extractImages(cleanHtml: string): string[] {
+  const $ = cheerio.load(cleanHtml, null, false);
+  const sources: string[] = [];
+
+  $('img[src]').each((_, element) => {
+    const src = $(element).attr('src');
+    if (src) {
+      sources.push(src);
+    }
+  });
+
+  return sources;
+}

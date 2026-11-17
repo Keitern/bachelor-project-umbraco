@@ -1,72 +1,154 @@
+// Responsible for cleaning Word's messy HTML before it is saved in Umbraco.
+//
 // Cleans Word HTML into the shared clean HTML format.
 // Input is the MARKED text from Office.js getSelection().getHtml() - one call per filled field.
-// Pure functions: HTML string in, HTML string out. No network, no Express. Easy to unit test.
-// Needs (phase 4): npm install sanitize-html
+// Pure functions: HTML string in, HTML string out.
+//
+// NOTE: written from known Word HTML patterns. Check it against REAL getHtml() output once the
+// add-in works (save it as test fixtures) and adjust convertWordFormatting if needed.
 
-/**
- * normalizeWord(html)  (exported)
- *
- * The main function of this file. Runs the steps below in order and returns clean HTML
- * that htmlToValues.ts and the converters in converters.ts can rely on. Google Docs gets its own
- * normalizeGoogle.ts later, which must produce the SAME clean format.
- *
- * Clean format (target):
- *   - only these tags: h1-h6, p, strong, em, u, a, ul, ol, li, blockquote, br,
- *     table, thead, tbody, tr, th, td, img
- *   - no class, style, lang or id attributes (except href on a, src/alt on img)
- *   - no empty paragraphs
- *
- * Selections can be small (one word) or start/end in the middle of a paragraph -
- * the result must still be valid HTML (sanitize-html closes open tags).
- *
- * @param {string} html   raw HTML of the selection
- * @returns {string}      clean HTML
- */
+import * as cheerio from 'cheerio';
+import sanitizeHtml from 'sanitize-html';
 
-/**
- * removeWordJunk(html)
- *
- * Removes things Word adds that are never content, BEFORE sanitising:
- *   - <!--[if ...]> ... <![endif]--> conditional comments and other comments
- *   - <style>, <meta>, <html>/<head> wrappers, <o:p></o:p> and other namespaced tags (o:, w:, v:)
- *
- * @param {string} html
- * @returns {string}
- */
+// The clean format: only these tags and attributes survive.
+const ALLOWED_TAGS = [
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'p',
+  'br',
+  'strong',
+  'em',
+  'u',
+  'a',
+  'ul',
+  'ol',
+  'li',
+  'blockquote',
+  'table',
+  'thead',
+  'tbody',
+  'tr',
+  'th',
+  'td',
+  'img'
+];
+const ALLOWED_ATTRIBUTES = {
+  a: ['href'],
+  img: ['src', 'alt']
+};
 
-/**
- * convertWordFormatting(html)
- *
- * Word often marks headings and bold/italic with classes or inline styles instead of tags.
- * Converts those to real tags so the information survives sanitising:
- *   - <p class="MsoTitle"> / class="MsoHeading1"  -> <h1>  (check real output first!)
- *   - <span style="font-weight:bold">             -> <strong>
- *   - <span style="font-style:italic">            -> <em>
- *   - <b> -> <strong>, <i> -> <em>
- *   - Word lists (<p class="MsoListParagraph"> with bullet characters) -> <ul><li>
- * Look at real getHtml() output before writing this: save it as a test fixture.
- *
- * @param {string} html
- * @returns {string}
- */
+// Cleans the marked Word HTML, step by step. Returns HTML that only uses the clean format.
+// Use: convertFields, on every field's HTML before it is converted.
+export function normalizeWord(html: string): string {
+  const withoutJunk = removeWordJunk(html);
+  const withRealTags = convertWordFormatting(withoutJunk);
+  const sanitized = sanitize(withRealTags);
+  return removeEmptyElements(sanitized);
+}
 
-/**
- * sanitize(html)
- *
- * Uses sanitize-html with the allowed tags/attributes from the clean format above.
- * Everything else is removed (the tag is dropped, its text is kept).
- * Also the safety step: removes scripts, event handlers (onclick) and javascript: links.
- *
- * @param {string} html
- * @returns {string}
- */
+// Removes things Word adds that are never content: comments (incl. <!--[if ...]> blocks),
+// <style>, <meta>, <link>, <xml> and Office tags like <o:p>, <w:...>, <v:...>.
+// Use: first step of normalizeWord.
+function removeWordJunk(html: string): string {
+  return html
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<(style|xml|script)[\s\S]*?<\/\1>/gi, '')
+    .replace(/<(meta|link)\b[^>]*>/gi, '')
+    .replace(/<\/?[a-z]+:[a-z]+\b[^>]*>/gi, '');
+}
 
-/**
- * removeEmptyElements(html)
- *
- * Removes paragraphs that only contain whitespace or &nbsp; (Word adds many),
- * and collapses repeated <br>.
- *
- * @param {string} html
- * @returns {string}
- */
+// Word often marks headings and bold/italic with classes or inline styles instead of tags.
+// This turns them into real tags, so the meaning survives sanitising (which drops styles).
+// Use: second step of normalizeWord.
+function convertWordFormatting(html: string): string {
+  const $ = cheerio.load(html, null, false);
+
+  // Word heading paragraphs -> real headings
+  $('p.MsoTitle').each((_, element) => {
+    element.tagName = 'h1';
+  });
+  for (let level = 1; level <= 6; level++) {
+    $(`p.MsoHeading${level}`).each((_, element) => {
+      element.tagName = `h${level}`;
+    });
+  }
+
+  // Bold / italic / underline written as inline styles -> real tags
+  $('span[style]').each((_, element) => {
+    const style = ($(element).attr('style') ?? '').toLowerCase().replace(/\s/g, '');
+    let inner = $(element).html() ?? '';
+    if (/font-weight:(bold|[6-9]00)/.test(style)) {
+      inner = `<strong>${inner}</strong>`;
+    }
+    if (style.includes('font-style:italic')) {
+      inner = `<em>${inner}</em>`;
+    }
+    if (style.includes('text-decoration:underline')) {
+      inner = `<u>${inner}</u>`;
+    }
+    $(element).html(inner);
+  });
+
+  // Word bullet characters (span with mso-list:Ignore) are not content
+  $('span[style*="mso-list"]').each((_, element) => {
+    const style = ($(element).attr('style') ?? '').toLowerCase();
+    if (style.includes('ignore')) {
+      $(element).remove();
+    }
+  });
+
+  // Word list paragraphs -> <ul><li>. Consecutive list paragraphs become one list.
+  $('p[class^="MsoListParagraph"]').each((_, element) => {
+    const item = $('<li></li>').html($(element).html() ?? '');
+    const previous = $(element).prev();
+    if (previous.is('ul')) {
+      previous.append(item);
+      $(element).remove();
+    } else {
+      $(element).replaceWith($('<ul></ul>').append(item));
+    }
+  });
+
+  return $.html();
+}
+
+// Keeps only the clean format (ALLOWED_TAGS / ALLOWED_ATTRIBUTES). Other tags are dropped but
+// their text is kept. Also the safety step: no scripts, event handlers or javascript: links.
+// Use: third step of normalizeWord.
+function sanitize(html: string): string {
+  return sanitizeHtml(html, {
+    allowedTags: ALLOWED_TAGS,
+    allowedAttributes: ALLOWED_ATTRIBUTES,
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowedSchemesByTag: { img: ['http', 'https', 'data'] },
+    transformTags: { b: 'strong', i: 'em' }
+  });
+}
+
+// Removes paragraphs, headings and list items that are empty or only contain spaces/&nbsp;
+// (Word adds many), and collapses repeated <br>.
+// Use: last step of normalizeWord.
+function removeEmptyElements(html: string): string {
+  const $ = cheerio.load(html, null, false);
+
+  $('p, h1, h2, h3, h4, h5, h6, li').each((_, element) => {
+    const text = $(element).text().replace(/ /g, ' ').trim();
+    if (text === '' && $(element).find('img').length === 0) {
+      $(element).remove();
+    }
+  });
+  $('ul, ol').each((_, element) => {
+    if ($(element).children('li').length === 0) {
+      $(element).remove();
+    }
+  });
+
+  return $.html()
+    .replace(/(<br\s*\/?>\s*){2,}/gi, '<br>')
+    .replace(/\n\s*\n/g, '\n') // blank lines left behind by removed elements
+    .trim();
+}
