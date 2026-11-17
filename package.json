@@ -1,21 +1,31 @@
 {
-  "name": "umbraco-connector-tooling",
+  "name": "umbraco-connector",
   "private": true,
   "type": "module",
   "scripts": {
+    "dev:backend": "node --watch --env-file=backend/.env backend/src/index.ts",
+    "start:backend": "node --env-file=backend/.env backend/src/index.ts",
+    "typecheck:backend": "tsc -p backend",
+    "test": "vitest --root backend",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "format": "prettier --write backend/src backend/tests eslint.config.js",
     "format:check": "prettier --check backend/src backend/tests eslint.config.js"
   },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.3.0"
+  },
   "devDependencies": {
-    "@types/node": "^26.6.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.9",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.14.0",
     "prettier": "^3.9.10",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.2",
-    "vitest": "^5.1.0"
+    "vitest": "^4.1.12"
   }
 }
