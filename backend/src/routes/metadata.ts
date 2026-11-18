@@ -1,8 +1,8 @@
 // Responsible for the task pane's dropdowns: document types, fields and existing pages.
-//
+
 // GET endpoints the task pane uses to fill its dropdowns. Read-only, no mapping.
 // index.ts mounts this router at /api, so the paths here start at '/'.
-//
+
 // Express 5 passes errors from async handlers to errorHandler automatically,
 // so the handlers can just `throw` (no try/catch needed).
 

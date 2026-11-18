@@ -1,5 +1,5 @@
 // Responsible for starting the backend: sets up the server, routes and error handling.
-//
+
 // Starts the server (CORS for the Word add-in origin).
 // This is the entry point: `npm run dev:backend` runs this file.
 
@@ -15,7 +15,6 @@ import { contentRouter } from './routes/content.ts';
 // import { getHttpsServerOptions } from 'office-addin-dev-certs';
 
 // Builds the Express app (middleware + routes + error handler) without starting it.
-// Use: startServer() below, and tests (supertest) that need the app without opening a port.
 export function createApp(): Express {
   const app = express();
 
@@ -31,7 +30,6 @@ export function createApp(): Express {
   app.use('/api', metadataRouter); // dropdown data
   app.use('/api/content', contentRouter); // save routes
 
-  // Must be registered LAST, so it catches errors from everything above.
   app.use(errorHandler);
 
   return app;
@@ -64,6 +62,13 @@ function errorHandler(
   // Anything else is a bug on our side. Don't leak details to the add-in.
   res.status(500).json({ error: 'Internal server error' });
 }
+
+
+
+
+
+
+
 
 // Starts the app on config.port.
 // Use: runs when this file is started directly (npm run dev:backend), not when tests import it.
