@@ -10,9 +10,8 @@ import { config } from './config.ts';
 import { UmbracoApiError } from './umbraco/client.ts';
 import { metadataRouter } from './routes/metadata.ts';
 import { contentRouter } from './routes/content.ts';
-// Enable for HTTPS (after yo office has installed office-addin-dev-certs, see startServer):
-// import https from 'node:https';
-// import { getHttpsServerOptions } from 'office-addin-dev-certs';
+import https from 'node:https';
+import { getHttpsServerOptions } from 'office-addin-dev-certs';
 
 // Builds the Express app (middleware + routes + error handler) without starting it.
 export function createApp(): Express {
@@ -36,9 +35,8 @@ export function createApp(): Express {
 }
 
 // Turns any thrown error into a JSON response, instead of Express' default HTML page.
-// Use: Express calls it automatically when a route throws (Express 5 also catches async errors).
+// Use: Express calls it automatically when a route throws errpr
 // Express only treats a middleware as an error handler when it has exactly 4 parameters,
-// so `next` must stay even though it is not used.
 // eslint-disable-next-line max-params
 function errorHandler(
   err: unknown,
@@ -63,40 +61,20 @@ function errorHandler(
   res.status(500).json({ error: 'Internal server error' });
 }
 
+// Starts the app over HTTPS on config.port.
+// HTTPS because the Word add-in runs on https://localhost:3000, and a browser blocks calls
+// from an HTTPS page to an HTTP backend. Async because loading the certificate takes a moment.
+async function startServer(): Promise<void> {
+  // Same localhost certificate the Word add-in's dev server uses
+  // (created by office-addin-dev-certs the first time `npm start` runs in the add-in).
+  const httpsOptions = await getHttpsServerOptions();
 
-
-
-
-
-
-
-// Starts the app on config.port.
-// Use: runs when this file is started directly (npm run dev:backend), not when tests import it.
-// HTTP for now; switch to HTTPS once the Word add-in exists (Office requires HTTPS).
-function startServer(): void {
-  createApp().listen(config.port, () => {
-    console.log(`Backend running on http://localhost:${config.port}`);
+  https.createServer(httpsOptions, createApp()).listen(config.port, () => {
+    console.log(`Backend running on https://localhost:${config.port}`);
   });
 }
 
-// HTTPS version of startServer. To switch:
-//   1. npm install -D office-addin-dev-certs   (root package.json; yo office installs it in
-//      word-addin/ too, and the certificate it creates is shared on this machine)
-//   2. Enable the two HTTPS imports at the top of this file
-//   3. Replace startServer above with this one, and change the call at the bottom to
-//      `await startServer();` (it is async because loading the certificate takes a moment)
-//   4. In the add-in, call the backend on https://localhost:<PORT> instead of http://
-//
-// async function startServer(): Promise<void> {
-//   // The same trusted localhost certificate the Word add-in's dev server uses
-//   const httpsOptions = await getHttpsServerOptions();
-//
-//   https.createServer(httpsOptions, createApp()).listen(config.port, () => {
-//     console.log(`Backend running on https://localhost:${config.port}`);
-//   });
-// }
-
 // import.meta.main is true only when this file is the one Node was started with.
 if (import.meta.main) {
-  startServer();
+  await startServer();
 }
