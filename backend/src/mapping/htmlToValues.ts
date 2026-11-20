@@ -13,7 +13,9 @@ const BLOCK_ELEMENTS = 'p, div, h1, h2, h3, h4, h5, h6, li, blockquote, tr';
 // entities are decoded (&amp; -> &), spaces are collapsed and empty lines removed.
 // Use: Textstring, Textarea, Tags, Date and Number fields.
 export function toPlainText(cleanHtml: string): string {
-  const $ = cheerio.load(cleanHtml, null, false);
+  // Line breaks in the HTML source are just spaces in HTML. Only <br> and block elements
+  // (added below) should become real line breaks in the text.
+  const $ = cheerio.load(cleanHtml.replace(/\s+/g, ' '), null, false);
 
   $('br').replaceWith('\n');
   $(BLOCK_ELEMENTS).each((_, element) => {

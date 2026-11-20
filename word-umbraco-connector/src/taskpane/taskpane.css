@@ -8,16 +8,42 @@ body {
   color: #1b1b1b;
 }
 
+/* Umbraco blue, used for the title, labels and buttons */
+:root {
+  --umbraco-blue: #3544b1;
+}
+
 h1 {
   font-size: 18px;
-  margin: 0 0 16px;
+  margin: 0 0 12px;
+  color: var(--umbraco-blue);
+}
+
+label {
+  display: block;
+  margin: 12px 0 4px;
+  font-weight: 600;
+  color: var(--umbraco-blue);
+}
+
+select,
+input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px;
+  font-size: 14px;
+}
+
+label.checkbox {
+  font-weight: normal;
 }
 
 button {
+  margin-top: 4px;
   padding: 8px 14px;
   border: none;
   border-radius: 4px;
-  background: #3544b1; /* Umbraco blue */
+  background: var(--umbraco-blue);
   color: #fff;
   font-size: 14px;
   cursor: pointer;
@@ -27,11 +53,29 @@ button:hover {
   background: #2a3690;
 }
 
-#document-types {
-  padding-left: 20px;
+button:disabled {
+  background: #9aa0c8;
+  cursor: default;
 }
 
-/* Status message under the buttons */
+button.secondary {
+  background: #e6e6e6;
+  color: #1b1b1b;
+}
+
+.hidden {
+  display: none;
+}
+
+.hint {
+  display: block;
+  margin: 12px 0 4px;
+  color: #555;
+  font-size: 12px;
+  font-weight: normal;
+}
+
+/* Status message under the button */
 .status {
   margin-top: 12px;
 }
@@ -46,4 +90,18 @@ button:hover {
 
 .status--error {
   color: #c62828;
+}
+
+/* Developer section, collapsed by default */
+.dev {
+  margin-top: 24px;
+  color: #555;
+  font-size: 12px;
+}
+
+#selection-html {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: Consolas, monospace;
+  font-size: 11px;
 }

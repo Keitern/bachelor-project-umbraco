@@ -22,10 +22,41 @@
     <main id="app-body" style="display: none;">
         <h1>Umbraco Connector</h1>
 
-        <button id="load-types" type="button">Load document types</button>
-        <ul id="document-types"></ul>
+        <!-- 1. What kind of page -->
+        <label for="document-type">Document type</label>
+        <select id="document-type"></select>
+
+        <!-- 2. Which page: an existing one, or a new one -->
+        <label for="document">Page</label>
+        <select id="document"></select>
+
+        <div id="new-name-row" class="hidden">
+            <label for="new-name">Name of the new page</label>
+            <input id="new-name" type="text" placeholder="e.g. My new article" />
+        </div>
+
+        <!-- 3. Which field the marked text goes into -->
+        <label for="field">Field</label>
+        <select id="field"></select>
+
+        <label class="checkbox">
+            <input id="publish" type="checkbox" />
+            Publish right away
+        </label>
+
+        <!-- 4. Send the marked text -->
+        <p class="hint">Mark text in the document, then click the button. The field's current content is replaced.</p>
+        <button id="insert" type="button">Insert marked text</button>
 
         <p id="status" class="status" role="status"></p>
+
+        <!-- For developers only: shows Word's raw HTML, used to collect test fixtures -->
+        <details class="dev">
+            <summary>Developer: show selection HTML</summary>
+            <button id="show-selection" type="button" class="secondary">Show selection</button>
+            <label for="selection-html" class="hint">Click inside, Ctrl+A, Ctrl+C to copy:</label>
+            <textarea id="selection-html" readonly rows="10" spellcheck="false"></textarea>
+        </details>
     </main>
 </body>
 

@@ -4,11 +4,40 @@
 // Input is the MARKED text from Office.js getSelection().getHtml() - one call per filled field.
 // Pure functions: HTML string in, HTML string out.
 //
-// NOTE: written from known Word HTML patterns. Check it against REAL getHtml() output once the
-// add-in works (save it as test fixtures) and adjust convertWordFormatting if needed.
+// Checked against REAL getHtml() output from Word on Windows (see backend/tests/fixtures/).
+// Add new fixtures when Word sends something new, and adjust convertWordFormatting.
 
 import * as cheerio from 'cheerio';
+import type { Cheerio, CheerioAPI } from 'cheerio';
+import type { Element } from 'domhandler';
 import sanitizeHtml from 'sanitize-html';
+
+// A list marker that means "numbered list": 1. 2) a. b) iv. ...
+const NUMBERED_MARKER = /^(\d+|[a-z]|[ivxlcdm]+)[.)]$/i;
+
+// Finds the bullet/number Word typed in front of a list item, removes it from the paragraph and
+// returns it (e.g. "-", "·" or "1."). Returns null if there is none.
+// Word writes the marker in one of two ways:
+//   filtered HTML (Word on Windows, seen in our fixtures):
+//     <span>1.<span style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;</span></span>
+//   older Word:  <span style="mso-list:Ignore">·</span>
+function takeListMarker($: CheerioAPI, paragraph: Cheerio<Element>): string | null {
+  const ignored = paragraph.find('span').filter((_, span) => {
+    return /mso-list:\s*ignore/i.test($(span).attr('style') ?? '');
+  });
+  const spacer = paragraph.find('span').filter((_, span) => {
+    return /font:\s*7(\.0)?pt/i.test($(span).attr('style') ?? '');
+  });
+
+  const markerSpan = ignored.length > 0 ? ignored.first() : spacer.first().parent();
+  if (markerSpan.length === 0 || markerSpan.is(paragraph)) {
+    return null;
+  }
+
+  const marker = markerSpan.text().replace(/ /g, ' ').trim();
+  markerSpan.remove();
+  return marker;
+}
 
 // The clean format: only these tags and attributes survive.
 const ALLOWED_TAGS = [
@@ -44,7 +73,9 @@ const ALLOWED_ATTRIBUTES = {
 // Cleans the marked Word HTML, step by step. Returns HTML that only uses the clean format.
 // Use: convertFields, on every field's HTML before it is converted.
 export function normalizeWord(html: string): string {
-  const withoutJunk = removeWordJunk(html);
+  // Word breaks long lines in its HTML source ("Sætning\nmed link"). In HTML any run of
+  // whitespace is just one space, so collapse it before anything else reads the text.
+  const withoutJunk = removeWordJunk(html).replace(/\s+/g, ' ');
   const withRealTags = convertWordFormatting(withoutJunk);
   const sanitized = sanitize(withRealTags);
   return removeEmptyElements(sanitized);
@@ -93,23 +124,24 @@ function convertWordFormatting(html: string): string {
     $(element).html(inner);
   });
 
-  // Word bullet characters (span with mso-list:Ignore) are not content
-  $('span[style*="mso-list"]').each((_, element) => {
-    const style = ($(element).attr('style') ?? '').toLowerCase();
-    if (style.includes('ignore')) {
-      $(element).remove();
-    }
-  });
-
-  // Word list paragraphs -> <ul><li>. Consecutive list paragraphs become one list.
+  // Word list paragraphs -> <ul>/<ol> with <li>.
+  // Word doesn't use real lists: each item is a <p class="MsoListParagraph...">, and the
+  // bullet or number is typed into the text. The marker decides the list type:
+  // "1." / "a)" / "iv." -> numbered (<ol>), anything else ("-", "·", "o") -> bullets (<ul>).
+  // Consecutive items of the same type become one list; "CxSpFirst" always starts a new one.
   $('p[class^="MsoListParagraph"]').each((_, element) => {
-    const item = $('<li></li>').html($(element).html() ?? '');
-    const previous = $(element).prev();
-    if (previous.is('ul')) {
+    const paragraph = $(element);
+    const marker = takeListMarker($, paragraph);
+    const listTag = marker !== null && NUMBERED_MARKER.test(marker) ? 'ol' : 'ul';
+    const startsNewList = (paragraph.attr('class') ?? '').includes('CxSpFirst');
+
+    const item = $('<li></li>').html(paragraph.html() ?? '');
+    const previous = paragraph.prev();
+    if (previous.is(listTag) && !startsNewList) {
       previous.append(item);
-      $(element).remove();
+      paragraph.remove();
     } else {
-      $(element).replaceWith($('<ul></ul>').append(item));
+      paragraph.replaceWith($(`<${listTag}></${listTag}>`).append(item));
     }
   });
 
@@ -150,5 +182,7 @@ function removeEmptyElements(html: string): string {
   return $.html()
     .replace(/(<br\s*\/?>\s*){2,}/gi, '<br>')
     .replace(/\n\s*\n/g, '\n') // blank lines left behind by removed elements
+    // one line per block, e.g. "</ul> <ol>" -> "</ul>\n<ol>" (spaces between inline tags stay)
+    .replace(/(<\/(?:p|h[1-6]|ul|ol|blockquote|table)>)\s+(?=<)/g, '$1\n')
     .trim();
 }
