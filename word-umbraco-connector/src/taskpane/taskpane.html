@@ -10,6 +10,11 @@
     <!-- Office JavaScript API -->
     <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 
+    <!-- Inter, the font used in the Figma design (falls back to Segoe UI if it can't load) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
     <link href="taskpane.css" rel="stylesheet" type="text/css" />
 </head>
 
@@ -20,33 +25,42 @@
     </section>
 
     <main id="app-body" style="display: none;">
-        <h1>Umbraco Connector</h1>
+        <!-- Header: back arrow (hidden on step 1) and the title of the current step -->
+        <header class="header">
+            <button id="back" type="button" class="back hidden" aria-label="Back">
+                <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M21 12H4M10 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            </button>
+            <h1 id="title">Choose Document Type</h1>
+        </header>
 
-        <!-- 1. What kind of page -->
-        <label for="document-type">Document type</label>
-        <select id="document-type"></select>
+        <!-- Step 1: list of document types -->
+        <section id="step-types" class="step">
+            <ul id="type-list" class="list"></ul>
+        </section>
 
-        <!-- 2. Which page: an existing one, or a new one -->
-        <label for="document">Page</label>
-        <select id="document"></select>
+        <!-- Step 2: existing pages of the chosen type, plus "Add new ..." -->
+        <section id="step-pages" class="step hidden">
+            <ul id="page-list" class="list"></ul>
+            <button id="add-page" type="button" class="list-add">
+                <span class="plus" aria-hidden="true">+</span>
+                <span id="add-page-label">Add new page</span>
+            </button>
+        </section>
 
-        <div id="new-name-row" class="hidden">
-            <label for="new-name">Name of the new page</label>
-            <input id="new-name" type="text" placeholder="e.g. My new article" />
-        </div>
+        <!-- Step 3: one card per field. "Fill Field" takes the marked text, the save buttons send it. -->
+        <section id="step-fields" class="step hidden">
+            <div id="new-name-card" class="card hidden">
+                <label for="new-name" class="card-name">Name of the new page</label>
+                <input id="new-name" type="text" placeholder="e.g. My new article" />
+            </div>
+            <div id="field-cards"></div>
 
-        <!-- 3. Which field the marked text goes into -->
-        <label for="field">Field</label>
-        <select id="field"></select>
-
-        <label class="checkbox">
-            <input id="publish" type="checkbox" />
-            Publish right away
-        </label>
-
-        <!-- 4. Send the marked text -->
-        <p class="hint">Mark text in the document, then click the button. The field's current content is replaced.</p>
-        <button id="insert" type="button">Insert marked text</button>
+            <button id="save-draft" type="button" class="primary">Save as draft</button>
+            <button id="save-publish" type="button" class="primary">Save &amp; Publish</button>
+        </section>
 
         <p id="status" class="status" role="status"></p>
 

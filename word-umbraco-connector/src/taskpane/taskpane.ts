@@ -1,32 +1,39 @@
-// Responsible for the task pane itself: dropdowns, buttons, and messages to the user.
+// Responsible for the task pane itself: the three steps, buttons, and messages to the user.
 // Talks to the backend through api.ts and to Word through word.ts.
 //
-// Flow: pick document type -> pick page (or "new page") -> pick field -> mark text in Word
-//       -> "Insert marked text" sends the selection to that field.
+// Flow (matches the Figma design):
+//   step 1: choose document type
+//   step 2: choose an existing page, or "Add new ..."
+//   step 3: one card per field. "Fill Field" takes the marked text in Word for that field
+//           (not saved yet). "Save as draft" / "Save & Publish" sends all filled fields at once.
 
-/* global document, HTMLSelectElement, HTMLInputElement, HTMLButtonElement, HTMLTextAreaElement, Office */
+/* global document, HTMLElement, HTMLInputElement, HTMLButtonElement, HTMLTextAreaElement, Office */
 
-import { createContent, getDocuments, getDocumentTypes, getFields, updateContent } from "./api";
+import {
+  createContent,
+  getDocuments,
+  getDocumentTypes,
+  getDocumentValues,
+  getFields,
+  updateContent,
+} from "./api";
+import type { DocumentType, Field, FilledField } from "./api";
 import { getSelectionHtml } from "./word";
+import type { MarkedText } from "./word";
 
-// Value of the "page" dropdown option that means "create a new page"
-const NEW_PAGE = "__new__";
+// What the user has chosen so far
+let chosenType: DocumentType | null = null;
+let chosenPage: { id: string; name: string } | null = null; // null on step 3 = new page
+let fields: Field[] = [];
+let currentValues: Record<string, string> = {}; // saved content per field alias (previews)
+const filled = new Map<string, MarkedText>(); // marked text per field alias, not saved yet
 
-// Shortcuts to the elements in taskpane.html
+// Shortcut to an element in taskpane.html
 function el<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
 }
-const typeSelect = (): HTMLSelectElement => {
-  return el<HTMLSelectElement>("document-type");
-};
-const pageSelect = (): HTMLSelectElement => {
-  return el<HTMLSelectElement>("document");
-};
-const fieldSelect = (): HTMLSelectElement => {
-  return el<HTMLSelectElement>("field");
-};
 
-// Shows a message under the button. kind decides the colour (see taskpane.css).
+// Shows a message at the bottom. kind decides the colour (see taskpane.css).
 function showStatus(message: string, kind: "info" | "error" | "success"): void {
   const status = el("status");
   status.textContent = message;
@@ -37,120 +44,235 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Something went wrong";
 }
 
-// Adds one <option> to a dropdown. textContent (not innerHTML), so names can't inject HTML.
-function addOption(select: HTMLSelectElement, value: string, label: string, disabled = false): void {
-  const option = document.createElement("option");
-  option.value = value;
-  option.textContent = label;
-  option.disabled = disabled;
-  select.appendChild(option);
+// Creates an element with a class and text. textContent (not innerHTML), so names can't inject HTML.
+function make<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  className: string,
+  text = ""
+): HTMLElementTagNameMap[K] {
+  const element = document.createElement(tag);
+  element.className = className;
+  element.textContent = text;
+  return element;
 }
 
-// Fills the "document type" dropdown, then loads pages and fields for the first type.
-// Use: once, when the task pane opens.
-async function loadDocumentTypes(): Promise<void> {
+// Shows one step, hides the others, and sets the header title and back arrow.
+function showStep(step: "types" | "pages" | "fields", title: string): void {
+  el("step-types").classList.toggle("hidden", step !== "types");
+  el("step-pages").classList.toggle("hidden", step !== "pages");
+  el("step-fields").classList.toggle("hidden", step !== "fields");
+  el("title").textContent = title;
+  el("back").classList.toggle("hidden", step === "types");
+  document.querySelector(".header")?.classList.toggle("with-back", step !== "types");
+}
+
+// Adds a clickable row to a list (<ul>).
+function addRow(list: HTMLElement, label: string, onClick: () => void, extra?: string): void {
+  const item = document.createElement("li");
+  const button = make("button", "", label);
+  button.type = "button";
+  if (extra) {
+    button.appendChild(make("span", "state", extra));
+  }
+  button.onclick = onClick;
+  item.appendChild(button);
+  list.appendChild(item);
+}
+
+// Step 1: lists the document types. Use: when the pane opens, and the back arrow on step 2.
+async function showDocumentTypes(): Promise<void> {
+  showStep("types", "Choose Document Type");
   showStatus("Loading document types...", "info");
+  const list = el("type-list");
+  list.innerHTML = "";
   try {
     const types = await getDocumentTypes();
-    typeSelect().innerHTML = "";
     for (const type of types) {
-      addOption(typeSelect(), type.id, type.name);
+      addRow(list, type.name, () => {
+        chosenType = type;
+        return showPages();
+      });
     }
     if (types.length === 0) {
-      showStatus("No document types found in Umbraco.", "error");
-      return;
+      list.appendChild(make("li", "empty", "No document types found in Umbraco."));
     }
-    await onDocumentTypeChanged();
+    showStatus("", "info");
   } catch (err) {
     showStatus(errorMessage(err), "error");
   }
 }
 
-// Loads the pages and fields of the chosen document type.
-// Use: when the document type dropdown changes (and once at start).
-async function onDocumentTypeChanged(documentIdToSelect?: string): Promise<void> {
-  const typeId = typeSelect().value;
-  showStatus("Loading pages and fields...", "info");
-
+// Step 2: lists the pages of the chosen type, plus "Add new ...".
+// Use: after choosing a type, and the back arrow on step 3.
+async function showPages(): Promise<void> {
+  if (!chosenType) {
+    return;
+  }
+  const type = chosenType;
+  showStep("pages", `Choose ${type.name}`);
+  el("add-page-label").textContent = `Add new ${type.name}`;
+  showStatus("Loading pages...", "info");
+  const list = el("page-list");
+  list.innerHTML = "";
   try {
-    const [pages, fields] = await Promise.all([getDocuments(typeId), getFields(typeId)]);
-
-    pageSelect().innerHTML = "";
+    const pages = await getDocuments(type.id);
     for (const page of pages) {
-      addOption(pageSelect(), page.id, `${page.name} (${page.state})`);
+      addRow(
+        list,
+        page.name,
+        () => {
+          return showFields({ id: page.id, name: page.name });
+        },
+        page.state
+      );
     }
-    addOption(pageSelect(), NEW_PAGE, "+ New page");
-    if (documentIdToSelect) {
-      pageSelect().value = documentIdToSelect;
+    if (pages.length === 0) {
+      list.appendChild(make("li", "empty", `No ${type.name} pages yet.`));
     }
-    onPageChanged();
-
-    fieldSelect().innerHTML = "";
-    for (const field of fields) {
-      const label = field.supported ? field.name : `${field.name} (can't be filled from text)`;
-      addOption(fieldSelect(), field.alias, label, !field.supported);
-    }
-    const firstSupported = fields.find((field) => {
-      return field.supported;
-    });
-    if (firstSupported) {
-      fieldSelect().value = firstSupported.alias;
-    }
-
-    showStatus("Ready. Mark text in the document and click the button.", "info");
+    showStatus("", "info");
   } catch (err) {
     showStatus(errorMessage(err), "error");
   }
 }
 
-// Shows the name input only when "+ New page" is chosen.
-function onPageChanged(): void {
-  el("new-name-row").classList.toggle("hidden", pageSelect().value !== NEW_PAGE);
+// Step 3: one card per field of the chosen type. page = null means "new page".
+// Use: after choosing a page or "Add new ...", and after creating a page.
+async function showFields(page: { id: string; name: string } | null): Promise<void> {
+  if (!chosenType) {
+    return;
+  }
+  chosenPage = page;
+  filled.clear();
+  showStep("fields", page ? page.name : `New ${chosenType.name}`);
+  el("new-name-card").classList.toggle("hidden", page !== null);
+  el("field-cards").innerHTML = "";
+  showStatus("Loading fields...", "info");
+  try {
+    const [loadedFields, values] = await Promise.all([
+      getFields(chosenType.id),
+      page ? getDocumentValues(page.id) : Promise.resolve(null),
+    ]);
+    fields = loadedFields;
+    currentValues = values ? values.values : {};
+    renderFieldCards();
+    showStatus("Mark text in Word, then click Fill Field on the field it belongs in.", "info");
+  } catch (err) {
+    showStatus(errorMessage(err), "error");
+  }
 }
 
-// Sends the marked text to the chosen field: updates the chosen page, or creates a new one.
-// Use: the "Insert marked text" button.
-async function insertMarkedText(): Promise<void> {
-  const button = el<HTMLButtonElement>("insert");
-  const fieldAlias = fieldSelect().value;
-  const publish = el<HTMLInputElement>("publish").checked;
-  const isNew = pageSelect().value === NEW_PAGE;
-  const newName = el<HTMLInputElement>("new-name").value.trim();
+// Draws the field cards: name, "Fill Field" button and a grey preview line.
+// The preview shows the marked text if the field was filled, else the saved content.
+function renderFieldCards(): void {
+  const container = el("field-cards");
+  container.innerHTML = "";
+  for (const field of fields) {
+    const card = make("div", "card");
+    const top = make("div", "card-top");
+    top.appendChild(make("span", "card-name", field.name));
 
-  if (!fieldAlias) {
-    showStatus("Choose a field first.", "error");
-    return;
-  }
-  if (isNew && newName === "") {
-    showStatus("Give the new page a name.", "error");
-    return;
-  }
+    let preview: string;
+    if (!field.supported) {
+      card.classList.add("unsupported");
+      preview = "Can't be filled from text";
+    } else {
+      const button = make("button", "small", "Fill Field");
+      button.type = "button";
+      button.onclick = () => {
+        return fillField(field);
+      };
+      top.appendChild(button);
 
-  button.disabled = true;
+      const marked = filled.get(field.alias);
+      if (marked) {
+        card.classList.add("filled");
+        preview = `New: ${marked.text.trim()}`;
+      } else {
+        preview = currentValues[field.alias] || "Empty";
+      }
+    }
+
+    card.appendChild(top);
+    card.appendChild(make("div", "card-preview", preview));
+    container.appendChild(card);
+  }
+}
+
+// Takes the marked text in Word and keeps it for one field (saved later with the save buttons).
+// Use: the "Fill Field" button on a card.
+async function fillField(field: Field): Promise<void> {
   try {
     const selection = await getSelectionHtml();
     if (selection.text.trim() === "") {
       showStatus("Nothing is marked. Select some text in the document first.", "error");
       return;
     }
+    filled.set(field.alias, selection);
+    renderFieldCards();
+    showStatus(`${field.name} filled. Click a save button when you're done.`, "info");
+  } catch (err) {
+    showStatus(errorMessage(err), "error");
+  }
+}
 
-    const fields = [{ alias: fieldAlias, html: selection.html }];
-    showStatus("Sending to Umbraco...", "info");
+// Sends all filled fields to Umbraco: updates the chosen page, or creates a new one.
+// Use: "Save as draft" (publish = false) and "Save & Publish" (publish = true).
+async function save(publish: boolean): Promise<void> {
+  if (!chosenType) {
+    return;
+  }
+  const newName = el<HTMLInputElement>("new-name").value.trim();
+  if (filled.size === 0) {
+    showStatus("Fill at least one field first.", "error");
+    return;
+  }
+  if (chosenPage === null && newName === "") {
+    showStatus("Give the new page a name.", "error");
+    return;
+  }
 
-    if (isNew) {
-      const created = await createContent({ documentTypeId: typeSelect().value, name: newName, fields, publish });
+  const fieldsToSend: FilledField[] = [...filled].map(([alias, marked]) => {
+    return { alias, html: marked.html };
+  });
+  const buttons = [el<HTMLButtonElement>("save-draft"), el<HTMLButtonElement>("save-publish")];
+  buttons.forEach((button) => {
+    button.disabled = true;
+  });
+  showStatus("Sending to Umbraco...", "info");
+
+  try {
+    let page = chosenPage;
+    if (page === null) {
+      const created = await createContent({
+        documentTypeId: chosenType.id,
+        name: newName,
+        fields: fieldsToSend,
+        publish,
+      });
       el<HTMLInputElement>("new-name").value = "";
-      // Reload the page list so the new page is in it, and select it for the next insert
-      await onDocumentTypeChanged(created.id);
-      showStatus(`Created "${created.name}" and filled ${fieldAlias}${publish ? " (published)" : " (draft)"}.`, "success");
+      page = { id: created.id, name: created.name };
     } else {
-      await updateContent(pageSelect().value, { fields, publish });
-      showStatus(`Inserted into ${fieldAlias}${publish ? " and published" : " (saved as draft)"}.`, "success");
+      await updateContent(page.id, { fields: fieldsToSend, publish });
     }
+    // Reload the cards so they show what is saved now
+    await showFields(page);
+    showStatus(publish ? "Saved and published." : "Saved as draft.", "success");
   } catch (err) {
     showStatus(errorMessage(err), "error");
   } finally {
-    button.disabled = false;
+    buttons.forEach((button) => {
+      button.disabled = false;
+    });
+  }
+}
+
+// The back arrow: step 3 -> step 2 (unsaved filled fields are dropped), step 2 -> step 1.
+function goBack(): void {
+  if (!el("step-fields").classList.contains("hidden")) {
+    filled.clear();
+    showPages();
+  } else {
+    showDocumentTypes();
   }
 }
 
@@ -174,12 +296,17 @@ Office.onReady((info) => {
   el("sideload-msg").style.display = "none";
   el("app-body").style.display = "block";
 
-  typeSelect().onchange = () => {
-    return onDocumentTypeChanged();
+  el("back").onclick = goBack;
+  el("add-page").onclick = () => {
+    return showFields(null);
   };
-  pageSelect().onchange = onPageChanged;
-  el("insert").onclick = insertMarkedText;
+  el("save-draft").onclick = () => {
+    return save(false);
+  };
+  el("save-publish").onclick = () => {
+    return save(true);
+  };
   el("show-selection").onclick = showSelection;
 
-  loadDocumentTypes();
+  showDocumentTypes();
 });

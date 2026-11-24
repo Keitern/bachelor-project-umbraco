@@ -37,7 +37,11 @@ export interface FilledField {
 // Sends one request to the backend and returns its JSON.
 // Throws an Error with the backend's own message (e.g. "name is required when creating"),
 // or a clear message when the backend can't be reached at all.
-async function callBackend<T>(method: "GET" | "POST" | "PUT", path: string, body?: unknown): Promise<T> {
+async function callBackend<T>(
+  method: "GET" | "POST" | "PUT",
+  path: string,
+  body?: unknown
+): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${BACKEND_URL}${path}`, {
@@ -69,12 +73,30 @@ export async function getDocumentTypes(): Promise<DocumentType[]> {
 
 // Lists the existing pages of one document type. Use: the "page" dropdown.
 export async function getDocuments(documentTypeId: string): Promise<DocumentSummary[]> {
-  return callBackend<DocumentSummary[]>("GET", `/documents?documentTypeId=${encodeURIComponent(documentTypeId)}`);
+  return callBackend<DocumentSummary[]>(
+    "GET",
+    `/documents?documentTypeId=${encodeURIComponent(documentTypeId)}`
+  );
 }
 
 // Lists the fields of one document type. Use: the "field" dropdown.
 export async function getFields(documentTypeId: string): Promise<Field[]> {
-  return callBackend<Field[]>("GET", `/document-types/${encodeURIComponent(documentTypeId)}/fields`);
+  return callBackend<Field[]>(
+    "GET",
+    `/document-types/${encodeURIComponent(documentTypeId)}/fields`
+  );
+}
+
+// One page with a short preview text per field alias (GET /api/documents/:id/values)
+export interface DocumentValues {
+  id: string;
+  name: string;
+  values: Record<string, string>;
+}
+
+// Gets the current content of a page as short previews. Use: the field cards.
+export async function getDocumentValues(id: string): Promise<DocumentValues> {
+  return callBackend<DocumentValues>("GET", `/documents/${encodeURIComponent(id)}/values`);
 }
 
 // Saves filled fields on an EXISTING page (other fields keep their value).

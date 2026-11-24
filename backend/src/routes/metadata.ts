@@ -9,6 +9,7 @@
 import express from 'express';
 import {
   getContentChildren,
+  getDocument,
   getDocumentsByType,
   getDocumentTypeProperties,
   getDocumentTypes
@@ -88,7 +89,58 @@ async function listParents(req: express.Request, res: express.Response): Promise
   );
 }
 
+// Max length of a preview text, so a long body text stays one short line in the task pane
+const PREVIEW_LENGTH = 80;
+
+// Turns a stored Umbraco value into a short, readable text. Rich text is { markup }, lists are
+// arrays, everything else is shown as text. HTML tags are stripped. Returns '' when empty.
+// Use: listDocumentValues, for the grey preview line under each field in the task pane.
+function previewText(value: unknown): string {
+  let text: string;
+  if (value === null || value === undefined) {
+    text = '';
+  } else if (typeof value === 'string') {
+    text = value;
+  } else if (Array.isArray(value)) {
+    text = value
+      .map((item) => {
+        return typeof item === 'object' && item !== null && 'name' in item
+          ? String(item.name)
+          : String(item);
+      })
+      .join(', ');
+  } else if (typeof value === 'object' && 'markup' in value) {
+    text = String(value.markup ?? '');
+  } else {
+    text = String(value);
+  }
+
+  const plain = text
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return plain.length > PREVIEW_LENGTH ? `${plain.slice(0, PREVIEW_LENGTH)}...` : plain;
+}
+
+// Returns one node's name and a short preview of each field: { id, name, values: { alias: text } }.
+// Use: the field cards in the task pane, so the user sees what is in a field before replacing it.
+async function listDocumentValues(req: express.Request, res: express.Response): Promise<void> {
+  const node = await getDocument(String(req.params.id));
+  if (node === null) {
+    throw httpError(404, 'Node not found');
+  }
+
+  const values: Record<string, string> = {};
+  for (const entry of node.values) {
+    values[entry.alias] = previewText(entry.value);
+  }
+
+  res.json({ id: node.id, name: node.variants[0]?.name ?? '', values });
+}
+
 metadataRouter.get('/document-types', listDocumentTypes);
 metadataRouter.get('/document-types/:id/fields', listFields);
 metadataRouter.get('/documents', listDocuments);
+metadataRouter.get('/documents/:id/values', listDocumentValues);
 metadataRouter.get('/content-tree', listParents);

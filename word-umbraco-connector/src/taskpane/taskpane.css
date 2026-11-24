@@ -1,101 +1,241 @@
-/* Simple layout for the task pane */
+/* Task pane styling, based on the Figma design (Add-in – step 1, 2 and 3) */
+
+:root {
+  --umbraco-blue: #283a97; /* page background */
+  --accent: #6377db; /* buttons and "Add new ..." */
+  --accent-hover: #7387e6;
+  --selected: rgba(255, 255, 255, 0.25); /* hovered/selected row in a list */
+  --card: #ebebeb;
+  --text-dark: #1b1b1b;
+  --text-muted: #555;
+}
 
 body {
   margin: 0;
-  padding: 16px;
-  font-family: "Segoe UI", system-ui, sans-serif;
-  font-size: 14px;
-  color: #1b1b1b;
-}
-
-/* Umbraco blue, used for the title, labels and buttons */
-:root {
-  --umbraco-blue: #3544b1;
-}
-
-h1 {
-  font-size: 18px;
-  margin: 0 0 12px;
-  color: var(--umbraco-blue);
-}
-
-label {
-  display: block;
-  margin: 12px 0 4px;
-  font-weight: 600;
-  color: var(--umbraco-blue);
-}
-
-select,
-input[type="text"] {
-  width: 100%;
+  padding: 20px;
+  min-height: 100vh;
   box-sizing: border-box;
-  padding: 6px;
-  font-size: 14px;
-}
-
-label.checkbox {
-  font-weight: normal;
-}
-
-button {
-  margin-top: 4px;
-  padding: 8px 14px;
-  border: none;
-  border-radius: 4px;
   background: var(--umbraco-blue);
   color: #fff;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Header: back arrow on the left, title centred (step 1) or on the right (step 2 and 3) */
+.header {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  margin-bottom: 28px;
+}
+
+.header h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header.with-back h1 {
+  text-align: right;
+}
+
+.back {
+  display: flex;
+  padding: 4px;
+  margin-left: -4px;
+  border: none;
+  background: none;
+  color: #fff;
   cursor: pointer;
 }
 
-button:hover {
-  background: #2a3690;
+/* Lists in step 1 and 2: plain rows that light up on hover */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-button:disabled {
+.list button,
+.list-add {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  background: none;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.list button:hover,
+.list button:focus-visible {
+  background: var(--selected);
+  outline: none;
+}
+
+.list .state {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.list-add {
+  background: var(--accent);
+}
+
+.list-add:hover {
+  background: var(--accent-hover);
+}
+
+.plus {
+  font-size: 22px;
+  line-height: 14px;
+  font-weight: 300;
+}
+
+.empty {
+  padding: 10px;
+  opacity: 0.7;
+}
+
+/* Step 3: one grey card per field */
+.card {
+  margin-bottom: 20px;
+  padding: 12px 10px;
+  background: var(--card);
+  color: var(--text-dark);
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-name {
+  flex: 1;
+  font-size: 14px;
+}
+
+.card-preview {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A field that got new text from "Fill Field" but isn't saved yet */
+.card.filled {
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.card.filled .card-preview {
+  color: var(--text-dark);
+}
+
+.card.unsupported {
+  opacity: 0.6;
+}
+
+#new-name {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  font: inherit;
+}
+
+.small {
+  padding: 4px 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.small:hover {
+  background: var(--accent-hover);
+}
+
+.primary {
+  display: block;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary:hover {
+  background: var(--accent-hover);
+}
+
+button:disabled,
+button:disabled:hover {
   background: #9aa0c8;
   cursor: default;
 }
 
-button.secondary {
-  background: #e6e6e6;
-  color: #1b1b1b;
-}
-
-.hidden {
-  display: none;
-}
-
-.hint {
-  display: block;
-  margin: 12px 0 4px;
-  color: #555;
-  font-size: 12px;
-  font-weight: normal;
-}
-
-/* Status message under the button */
+/* Status message at the bottom */
 .status {
   margin-top: 12px;
+  min-height: 1em;
 }
 
 .status--info {
-  color: #555;
+  color: #dfe3ff;
 }
 
 .status--success {
-  color: #1a7f37;
+  color: #8ff0a4;
 }
 
 .status--error {
-  color: #c62828;
+  color: #ffb4b4;
 }
 
 /* Developer section, collapsed by default */
 .dev {
   margin-top: 24px;
-  color: #555;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.secondary {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border: none;
+  background: #e6e6e6;
+  color: var(--text-dark);
+  cursor: pointer;
+}
+
+.hint {
+  display: block;
+  margin: 8px 0 4px;
   font-size: 12px;
 }
 
