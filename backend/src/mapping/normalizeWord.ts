@@ -1,5 +1,5 @@
 /**
- * @file Responsible for cleaning Word's messy HTML before it is saved in Umbraco.
+ * Responsible for cleaning Word's messy HTML before it is saved in Umbraco.
  *
  * Cleans Word HTML into the shared clean HTML format.
  * Input is the MARKED text from Office.js getSelection().getHtml() - one call per filled field.
@@ -7,6 +7,8 @@
  *
  * Checked against REAL getHtml() output from Word on Windows (see backend/tests/fixtures/).
  * Add new fixtures when Word sends something new, and adjust convertWordFormatting.
+ *
+ * @module
  */
 
 import * as cheerio from 'cheerio';
@@ -31,7 +33,7 @@ const NUMBERED_MARKER = /^(\d+|[a-z]|[ivxlcdm]+)[.)]$/i;
  * @param paragraph - One <p class="MsoListParagraph..."> element. Its marker span is removed.
  * @returns The marker text, or null if there is none.
  */
-function takeListMarker(parsedHtml: CheerioAPI, paragraph: Cheerio<Element>): string | null {
+export function takeListMarker(parsedHtml: CheerioAPI, paragraph: Cheerio<Element>): string | null {
   const ignored = paragraph.find('span').filter((_, span) => {
     return /mso-list:\s*ignore/i.test(parsedHtml(span).attr('style') ?? '');
   });
@@ -109,7 +111,7 @@ export function normalizeWord(html: string): string {
  * @param html - The raw Word HTML.
  * @returns The HTML without those parts.
  */
-function removeWordJunk(html: string): string {
+export function removeWordJunk(html: string): string {
   return html
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<(style|xml|script)[\s\S]*?<\/\1>/gi, '')
@@ -128,7 +130,7 @@ function removeWordJunk(html: string): string {
  * @param html - Word HTML after removeWordJunk.
  * @returns The same HTML with real tags (styles and classes are still there).
  */
-function convertWordFormatting(html: string): string {
+export function convertWordFormatting(html: string): string {
   const parsedHtml = cheerio.load(html, null, false);
 
   // Word heading paragraphs -> real headings
@@ -189,7 +191,7 @@ function convertWordFormatting(html: string): string {
  * @param html - HTML after convertWordFormatting.
  * @returns HTML with only allowed tags and attributes. <b> becomes <strong>, <i> becomes <em>.
  */
-function sanitize(html: string): string {
+export function sanitize(html: string): string {
   return sanitizeHtml(html, {
     allowedTags: ALLOWED_TAGS,
     allowedAttributes: ALLOWED_ATTRIBUTES,
@@ -207,7 +209,7 @@ function sanitize(html: string): string {
  * @param html - HTML after sanitize.
  * @returns The final clean HTML, with one block element per line.
  */
-function removeEmptyElements(html: string): string {
+export function removeEmptyElements(html: string): string {
   const parsedHtml = cheerio.load(html, null, false);
 
   parsedHtml('p, h1, h2, h3, h4, h5, h6, li').each((_, element) => {

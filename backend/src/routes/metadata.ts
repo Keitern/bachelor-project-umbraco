@@ -1,11 +1,13 @@
 /**
- * @file Responsible for the data the task pane shows: document types, fields, pages and their content.
+ * Responsible for the data the task pane shows: document types, fields, pages and their content.
  *
  * GET endpoints the task pane uses to fill its lists and field cards. Read-only, no mapping.
  * index.ts mounts this router at /api, so the paths here start at '/'.
  *
  * Express 5 passes errors from async handlers to errorHandler automatically,
  * so the handlers can just `throw` (no try/catch needed).
+ *
+ * @module
  */
 
 import express from 'express';
@@ -30,7 +32,7 @@ export const metadataRouter = express.Router();
  * @param name - Name of the query parameter.
  * @returns The trimmed value, or undefined when it is missing, empty, or sent more than once.
  */
-function queryString(req: express.Request, name: string): string | undefined {
+export function queryString(req: express.Request, name: string): string | undefined {
   const value = req.query[name];
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
 }
@@ -42,7 +44,10 @@ function queryString(req: express.Request, name: string): string | undefined {
  * @param req - No parameters.
  * @param res - Used to send the list.
  */
-async function listDocumentTypes(req: express.Request, res: express.Response): Promise<void> {
+export async function listDocumentTypes(
+  req: express.Request,
+  res: express.Response
+): Promise<void> {
   const types = await getDocumentTypes();
 
   res.json(
@@ -59,7 +64,7 @@ async function listDocumentTypes(req: express.Request, res: express.Response): P
  * @param req - Params: id (the document type's id).
  * @param res - Used to send the list.
  */
-async function listFields(req: express.Request, res: express.Response): Promise<void> {
+export async function listFields(req: express.Request, res: express.Response): Promise<void> {
   const properties = await getDocumentTypeProperties(String(req.params.id));
 
   res.json(
@@ -84,7 +89,7 @@ async function listFields(req: express.Request, res: express.Response): Promise<
  * @param res - Used to send the list.
  * @throws {Error} 400 if documentTypeId is missing.
  */
-async function listDocuments(req: express.Request, res: express.Response): Promise<void> {
+export async function listDocuments(req: express.Request, res: express.Response): Promise<void> {
   const documentTypeId = queryString(req, 'documentTypeId');
   if (documentTypeId === undefined) {
     throw httpError(400, 'Query parameter documentTypeId is required');
@@ -107,7 +112,7 @@ async function listDocuments(req: express.Request, res: express.Response): Promi
  * @param req - Query: parentId (optional, leave out for the top level).
  * @param res - Used to send the list.
  */
-async function listParents(req: express.Request, res: express.Response): Promise<void> {
+export async function listParents(req: express.Request, res: express.Response): Promise<void> {
   const parentId = queryString(req, 'parentId') ?? null;
 
   const nodes = await getContentChildren(parentId);
@@ -130,7 +135,7 @@ const PREVIEW_LENGTH = 80;
  * @param value - A stored value, in whatever format the field's editor uses.
  * @returns Plain text, max PREVIEW_LENGTH characters (then "..."), or '' when empty.
  */
-function previewText(value: unknown): string {
+export function previewText(value: unknown): string {
   let text: string;
   if (value === null || value === undefined) {
     text = '';
@@ -167,7 +172,10 @@ function previewText(value: unknown): string {
  * @param res - Used to send the previews.
  * @throws {Error} 404 if the node doesn't exist.
  */
-async function listDocumentValues(req: express.Request, res: express.Response): Promise<void> {
+export async function listDocumentValues(
+  req: express.Request,
+  res: express.Response
+): Promise<void> {
   const node = await getDocument(String(req.params.id));
   if (node === null) {
     throw httpError(404, 'Node not found');

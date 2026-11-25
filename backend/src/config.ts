@@ -1,9 +1,11 @@
 /**
- * @file Responsible for the backend settings (Umbraco address, API user, port, allowed add-in).
+ * Responsible for the backend settings (Umbraco address, API user, port, allowed add-in).
  *
  * Reads and validates environment variables.
  * Every other file imports config from here instead of reading process.env directly, so all
  * settings live in one place.
+ *
+ * @module
  */
 
 /**
@@ -36,7 +38,7 @@ export interface Config {
  * @returns The value, with spaces around it removed.
  * @throws {Error} If the variable is missing or empty.
  */
-function requireEnv(name: string): string {
+export function requireEnv(name: string): string {
   const value = process.env[name];
 
   if (value === undefined || value.trim() === '') {

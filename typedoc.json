@@ -1,0 +1,12 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "Umbraco Connector",
+  "entryPoints": ["backend/src", "word-umbraco-connector/src/taskpane"],
+  "entryPointStrategy": "expand",
+  "tsconfig": "tsconfig.typedoc.json",
+  "out": "docs-site",
+  "readme": "none",
+  "skipErrorChecking": true,
+  "excludeExternals": true,
+  "sort": ["source-order"]
+}

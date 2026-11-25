@@ -1,9 +1,11 @@
 /**
- * @file Responsible for turning the user's filled fields into values Umbraco accepts.
+ * Responsible for turning the user's filled fields into values Umbraco accepts.
  *
  * Turns the fields the user filled in the task pane into the values array for Umbraco.
  * For each field: find the property, clean the HTML, pick the converter for its data type, run it.
  * Pure functions: no network. The properties come from client.getDocumentTypeProperties.
+ *
+ * @module
  */
 
 import { httpError } from '../httpError.ts';
@@ -32,7 +34,7 @@ export type Source = 'word' | 'google';
  * @returns Clean HTML (see normalizeWord).
  * @throws {Error} 400 for 'google', which isn't supported yet.
  */
-function normalize(html: string, source: Source): string {
+export function normalize(html: string, source: Source): string {
   if (source === 'word') {
     return normalizeWord(html);
   }

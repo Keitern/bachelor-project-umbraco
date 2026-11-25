@@ -1,6 +1,8 @@
 /**
- * @file Responsible for everything that talks to the Word document through Office.js
+ * Responsible for everything that talks to the Word document through Office.js
  * (reading the marked text, later: storing the Umbraco node id in the document).
+ *
+ * @module
  */
 
 /* global Word */

@@ -1,15 +1,17 @@
 /**
- * @file Responsible for logging the backend in to Umbraco as the API user (getting and caching tokens).
+ * Responsible for logging the backend in to Umbraco as the API user (getting and caching tokens).
  *
  * Gets a token from the Management API (apiBase = the Management API) and caches it,
  * so the backend stays logged in as the API user.
+ *
+ * @module
  */
 import { config } from '../config.ts';
 
 const { apiBase, clientId, clientSecret } = config;
 
 /** The JSON Umbraco sends back from the token endpoint. */
-interface TokenResponse {
+export interface TokenResponse {
   /** The token itself, sent as "Authorization: Bearer ..." on every API call. */
   access_token: string;
   /** How long the token lives, in seconds (299 in the spike). */
@@ -18,13 +20,14 @@ interface TokenResponse {
 
 //=============================== Request a new token =====================================
 /**
- * Asks Umbraco for a new token (client credentials login). Not exported: only getToken() uses it.
- * Use: getToken(), when there is no cached token or it is about to expire.
+ * Asks Umbraco for a new token (client credentials login).
+ * Use: only getToken(), when there is no cached token or it is about to expire.
+ * Other files should call getToken() instead, or they skip the cache and log in on every call.
  *
  * @returns Umbraco's token response: the token and how many seconds it lives.
  * @throws {Error} If Umbraco does not answer 2xx (e.g. wrong client id or secret).
  */
-async function requestToken(): Promise<TokenResponse> {
+export async function requestToken(): Promise<TokenResponse> {
   const tokenRes = await fetch(`${apiBase}/security/back-office/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

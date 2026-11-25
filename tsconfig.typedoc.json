@@ -1,0 +1,12 @@
+{
+  // Only used by TypeDoc (npm run docs), to read the backend AND the add-in in one go.
+  // Building and type checking still use backend/tsconfig.json and the add-in's own tsconfig.
+  "extends": "./backend/tsconfig.json",
+  "compilerOptions": {
+    // "Bundler" understands both import styles: the backend's './client.ts' and the add-in's './api'
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["backend/src", "word-umbraco-connector/src/taskpane"]
+}

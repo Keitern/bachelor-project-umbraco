@@ -7,6 +7,7 @@
 #   npm run format:check
 #   npm run typecheck:backend
 #   npm test -- --run
+#   npm run docs            (then open docs-site/index.html to see the documentation site)
 
 name: CI
 
@@ -51,3 +52,45 @@ jobs:
       - name: Unit tests
         if: ${{ !cancelled() }}
         run: npm test -- --run
+
+  # Builds the documentation website from the JSDoc comments (TypeDoc) and publishes it on
+  # GitHub Pages. Only runs when all checks above passed.
+  # One-time setup on GitHub: Settings -> Pages -> Source: "GitHub Actions".
+  docs:
+    name: Publish documentation
+    needs: checks
+    runs-on: ubuntu-latest
+
+    # Rights needed to publish to GitHub Pages
+    permissions:
+      pages: write
+      id-token: write
+
+    # Shows the site's address on the run's summary page
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install packages
+        run: npm ci
+
+      # Same as `npm run docs` locally: writes the website to docs-site/
+      - name: Build documentation
+        run: npm run docs
+
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-site
+
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

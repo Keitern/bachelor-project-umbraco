@@ -1,5 +1,5 @@
 /**
- * @file Responsible for converting marked text into each data type's format (text, rich text, tags...).
+ * Responsible for converting marked text into each data type's format (text, rich text, tags...).
  *
  * Converters: one function per supported data type. Each turns clean HTML (the marked text)
  * into the value format that data type expects. Pure functions: no network.
@@ -20,6 +20,8 @@
  * "no" = verify ONCE before relying on it: fill such a field by hand in the backoffice and read
  * the node with GET /document/{id} to see the exact format. Media Picker is left out (needs an
  * image upload first).
+ *
+ * @module
  */
 
 import TurndownService from 'turndown';
@@ -28,7 +30,7 @@ import { extractLinks, toLines, toPlainText } from './htmlToValues.ts';
 import type { DocumentTypeProperty } from '../umbraco/client.ts';
 
 /** Data type settings from Umbraco, e.g. [{ alias: 'maxChars', value: 100 }]. */
-type DataTypeConfig = DocumentTypeProperty['config'];
+export type DataTypeConfig = DocumentTypeProperty['config'];
 
 /** Every converter: clean HTML (+ the data type's settings) in, Umbraco value out. */
 export type Converter = (cleanHtml: string, config: DataTypeConfig) => unknown;
@@ -41,7 +43,7 @@ export type Converter = (cleanHtml: string, config: DataTypeConfig) => unknown;
  * @param alias - The setting's alias, e.g. 'maxChars'.
  * @returns The number, or undefined if it is not set (or not a number).
  */
-function numberSetting(config: DataTypeConfig, alias: string): number | undefined {
+export function numberSetting(config: DataTypeConfig, alias: string): number | undefined {
   const setting = config.find((c) => {
     return c.alias === alias;
   });
@@ -56,7 +58,7 @@ function numberSetting(config: DataTypeConfig, alias: string): number | undefine
  * @param config - The data type's settings (maxChars is read from here).
  * @throws {Error} 400 if the text is longer than maxChars.
  */
-function checkMaxChars(text: string, config: DataTypeConfig): void {
+export function checkMaxChars(text: string, config: DataTypeConfig): void {
   const maxChars = numberSetting(config, 'maxChars');
   if (maxChars !== undefined && maxChars > 0 && text.length > maxChars) {
     throw httpError(
@@ -75,7 +77,7 @@ function checkMaxChars(text: string, config: DataTypeConfig): void {
  * @returns The text, on one line.
  * @throws {Error} 400 if the text is longer than maxChars.
  */
-function toTextstring(cleanHtml: string, config: DataTypeConfig): string {
+export function toTextstring(cleanHtml: string, config: DataTypeConfig): string {
   const text = toPlainText(cleanHtml).replace(/\n/g, ' ');
   checkMaxChars(text, config);
   return text;
@@ -90,7 +92,7 @@ function toTextstring(cleanHtml: string, config: DataTypeConfig): string {
  * @returns The text, with \n between paragraphs.
  * @throws {Error} 400 if the text is longer than maxChars.
  */
-function toTextarea(cleanHtml: string, config: DataTypeConfig): string {
+export function toTextarea(cleanHtml: string, config: DataTypeConfig): string {
   const text = toPlainText(cleanHtml);
   checkMaxChars(text, config);
   return text;
@@ -104,7 +106,7 @@ function toTextarea(cleanHtml: string, config: DataTypeConfig): string {
  * @param cleanHtml - The marked text after normalizeWord.
  * @returns { markup, blocks } with the HTML as markup.
  */
-function toRichText(cleanHtml: string): { markup: string; blocks: object } {
+export function toRichText(cleanHtml: string): { markup: string; blocks: object } {
   return {
     markup: cleanHtml,
     blocks: { layout: {}, contentData: [], settingsData: [], expose: [] }
@@ -121,7 +123,7 @@ const turndown = new TurndownService({ headingStyle: 'atx', bulletListMarker: '-
  * @param cleanHtml - The marked text after normalizeWord.
  * @returns The Markdown text.
  */
-function toMarkdown(cleanHtml: string): string {
+export function toMarkdown(cleanHtml: string): string {
   return turndown.turndown(cleanHtml);
 }
 
@@ -132,7 +134,7 @@ function toMarkdown(cleanHtml: string): string {
  * @param cleanHtml - The marked text after normalizeWord.
  * @returns One string per line, without empty lines.
  */
-function toRepeatableTextstrings(cleanHtml: string): string[] {
+export function toRepeatableTextstrings(cleanHtml: string): string[] {
   return toLines(cleanHtml);
 }
 
@@ -143,7 +145,7 @@ function toRepeatableTextstrings(cleanHtml: string): string[] {
  * @param cleanHtml - The marked text after normalizeWord, e.g. "news, sport".
  * @returns The tags, e.g. ['news', 'sport'].
  */
-function toTags(cleanHtml: string): string[] {
+export function toTags(cleanHtml: string): string[] {
   const tags = toPlainText(cleanHtml)
     .split(/[,\n]/)
     .map((tag) => {
@@ -164,7 +166,7 @@ function toTags(cleanHtml: string): string[] {
  * @returns The date in Umbraco's format, e.g. '2026-11-17 00:00:00'.
  * @throws {Error} 400 if no date can be read, or the date doesn't exist (e.g. 31-02-2026).
  */
-function toDate(cleanHtml: string): string {
+export function toDate(cleanHtml: string): string {
   const text = toPlainText(cleanHtml).trim();
   const yearFirst = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
   const dayFirst = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/.exec(text);
@@ -204,7 +206,7 @@ function toDate(cleanHtml: string): string {
  * @returns The number.
  * @throws {Error} 400 if the text is not a number.
  */
-function toNumber(cleanHtml: string): number {
+export function toNumber(cleanHtml: string): number {
   const text = toPlainText(cleanHtml).trim().replace(/\s/g, '').replace(',', '.');
   const number = Number(text);
   if (text === '' || Number.isNaN(number)) {
@@ -221,7 +223,7 @@ function toNumber(cleanHtml: string): number {
  * @returns The whole number.
  * @throws {Error} 400 if the text is not a number, or not a whole number.
  */
-function toInteger(cleanHtml: string): number {
+export function toInteger(cleanHtml: string): number {
   const number = toNumber(cleanHtml);
   if (!Number.isInteger(number)) {
     throw httpError(400, `The field needs a whole number, got ${number}`);
@@ -237,7 +239,7 @@ function toInteger(cleanHtml: string): number {
  * @returns One link object per <a href> in the text.
  * @throws {Error} 400 if the marked text contains no links.
  */
-function toUrlPicker(cleanHtml: string): object[] {
+export function toUrlPicker(cleanHtml: string): object[] {
   const links = extractLinks(cleanHtml);
   if (links.length === 0) {
     throw httpError(400, 'The marked text contains no links');

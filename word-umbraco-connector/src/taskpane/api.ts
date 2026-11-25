@@ -1,8 +1,10 @@
 /**
- * @file Responsible for all calls from the task pane to OUR backend (never to Umbraco directly).
+ * Responsible for all calls from the task pane to OUR backend (never to Umbraco directly).
  *
  * The backend runs on https://localhost:3001 (npm run dev:backend in the project root).
  * Every exported function here = one backend endpoint.
+ *
+ * @module
  */
 
 /** Base address of the backend's API. */
@@ -51,7 +53,7 @@ export interface FilledField {
  * @throws {Error} With the backend's own message (e.g. "name is required when creating"),
  *   or a clear message when the backend can't be reached at all.
  */
-async function callBackend<ResponseType>(
+export async function callBackend<ResponseType>(
   method: "GET" | "POST" | "PUT",
   path: string,
   body?: unknown

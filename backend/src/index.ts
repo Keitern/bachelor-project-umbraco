@@ -1,8 +1,10 @@
 /**
- * @file Responsible for starting the backend: sets up the server, routes and error handling.
+ * Responsible for starting the backend: sets up the server, routes and error handling.
  *
  * Starts the server (CORS for the Word add-in origin).
  * This is the entry point: `npm run dev:backend` runs this file.
+ *
+ * @module
  */
 
 import express from 'express';
@@ -54,7 +56,7 @@ export function createApp(): Express {
  * @param next - Not used, but required for Express to see this as an error handler.
  */
 // eslint-disable-next-line max-params
-function errorHandler(
+export function errorHandler(
   err: unknown,
   req: express.Request,
   res: express.Response,
@@ -84,7 +86,7 @@ function errorHandler(
  * HTTPS because the Word add-in runs on https://localhost:3000, and a browser blocks calls
  * from an HTTPS page to an HTTP backend. Async because loading the certificate takes a moment.
  */
-async function startServer(): Promise<void> {
+export async function startServer(): Promise<void> {
   // Same localhost certificate the Word add-in's dev server uses
   // (created by office-addin-dev-certs the first time `npm start` runs in the add-in).
   const httpsOptions = await getHttpsServerOptions();

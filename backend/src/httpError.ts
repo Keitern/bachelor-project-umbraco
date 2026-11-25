@@ -1,5 +1,7 @@
 /**
- * @file Responsible for errors that should reach the add-in with a status, e.g. 400 for bad input.
+ * Responsible for errors that should reach the add-in with a status, e.g. 400 for bad input.
+ *
+ * @module
  */
 
 /**

@@ -1,9 +1,11 @@
 /**
- * @file Responsible for reading plain text, lines, links and images out of HTML.
+ * Responsible for reading plain text, lines, links and images out of HTML.
  *
  * Pulls specific kinds of content out of clean HTML (the marked text after normalizeWord):
  * plain text, lines, links, images. Used by converters.ts for fields that are NOT rich text.
  * Pure functions: HTML string in, data out.
+ *
+ * @module
  */
 
 import * as cheerio from 'cheerio';

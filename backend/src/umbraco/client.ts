@@ -1,16 +1,18 @@
 /**
- * @file Responsible for all communication with Umbraco: reading, creating, updating and publishing.
+ * Responsible for all communication with Umbraco: reading, creating, updating and publishing.
  *
  * Management API calls. The ONLY file that talks to Umbraco's endpoints (besides auth.ts).
  * Code to start from: steps 2-4 in spike/spike.mjs.
  * Verify every path and body in Swagger: {UMBRACO_URL}/umbraco/openapi/index.html
+ *
+ * @module
  */
 
 import { config } from '../config.ts';
 import { getToken, clearToken } from './auth.ts';
 
 /** The HTTP methods we use against the Management API. */
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 /**
  * Error thrown when Umbraco answers with a non-2xx status.
@@ -45,7 +47,7 @@ export class UmbracoApiError extends Error {
  * @param body - Optional body, sent as JSON. Without a body no Content-Type header is sent.
  * @returns The raw fetch Response (not checked for errors here).
  */
-async function send(method: HttpMethod, path: string, body?: unknown): Promise<Response> {
+export async function send(method: HttpMethod, path: string, body?: unknown): Promise<Response> {
   const token = await getToken();
 
   return fetch(`${config.apiBase}${path}`, {
@@ -69,7 +71,7 @@ async function send(method: HttpMethod, path: string, body?: unknown): Promise<R
  * @returns The parsed JSON, or null when Umbraco answers with an empty body.
  * @throws {UmbracoApiError} If Umbraco answers with a non-2xx status (after the 401 retry).
  */
-async function request<finalType = unknown>(
+export async function request<finalType = unknown>(
   method: HttpMethod,
   path: string,
   body?: unknown
@@ -150,7 +152,7 @@ export interface DocumentResponse {
 }
 
 /** Item in GET /tree/document/root and /tree/document/children. */
-interface DocumentTreeItem {
+export interface DocumentTreeItem {
   id: string;
   hasChildren: boolean;
   documentType: { id: string };
@@ -171,7 +173,7 @@ export interface DocumentTypeTreeItem {
 }
 
 /** What GET /document-type/{id} returns (only what we use). */
-interface DocumentTypeResponse {
+export interface DocumentTypeResponse {
   id: string;
   properties: Array<{
     alias: string;
@@ -182,7 +184,7 @@ interface DocumentTypeResponse {
 }
 
 /** What GET /data-type/{id} returns (only what we use). */
-interface DataTypeResponse {
+export interface DataTypeResponse {
   id: string;
   /** Decides the value format, e.g. 'Umbraco.TextBox'. */
   editorAlias: string;
@@ -194,7 +196,7 @@ interface DataTypeResponse {
  * Tree endpoints return one page of results: { total, items }.
  * @typeParam Item - The type of one item in the page.
  */
-interface Paged<Item> {
+export interface Paged<Item> {
   total: number;
   items: Item[];
 }
@@ -229,7 +231,7 @@ const TREE_PAGE_SIZE = 500;
  * @param item - A raw item from a /tree/document endpoint.
  * @returns The simplified node. Missing name/state become '(no name)' / 'Unknown'.
  */
-function toSummary(item: DocumentTreeItem): DocumentSummary {
+export function toSummary(item: DocumentTreeItem): DocumentSummary {
   return {
     id: item.id,
     name: item.variants[0]?.name ?? '(no name)',
@@ -303,7 +305,7 @@ export async function publishDocument(id: string): Promise<void> {
  * @param parentId - The parent node's id, or null for the top level.
  * @returns The raw tree items (max TREE_PAGE_SIZE).
  */
-async function getTreeItems(parentId: string | null): Promise<DocumentTreeItem[]> {
+export async function getTreeItems(parentId: string | null): Promise<DocumentTreeItem[]> {
   const path =
     parentId === null
       ? `/tree/document/root?take=${TREE_PAGE_SIZE}`

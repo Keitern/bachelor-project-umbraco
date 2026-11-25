@@ -1,8 +1,10 @@
 /**
- * @file Responsible for building what we send to Umbraco when creating or updating a page.
+ * Responsible for building what we send to Umbraco when creating or updating a page.
  *
  * Builds the request bodies for the Management API (POST /document and PUT /document/{id}).
  * Pure functions: no network. Formats confirmed by the spike (Umbraco 18).
+ *
+ * @module
  */
 
 import { randomUUID } from 'node:crypto';

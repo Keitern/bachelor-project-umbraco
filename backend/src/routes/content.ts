@@ -1,5 +1,5 @@
 /**
- * @file Responsible for "Save as draft" and "Save & Publish": creating and updating pages.
+ * Responsible for "Save as draft" and "Save & Publish": creating and updating pages.
  *
  * POST /api/content, PUT /api/content/:id
  * HTTP layer: read the request, validate it, call mapping + client, send the response.
@@ -14,6 +14,8 @@
  *
  * Express 5 passes errors from async handlers to errorHandler automatically,
  * so the handlers can just `throw` (no try/catch needed).
+ *
+ * @module
  */
 
 import express from 'express';
@@ -33,7 +35,7 @@ import {
 export const contentRouter = express.Router();
 
 /** What the add-in sends, after validateSaveRequest has checked it. */
-interface SaveRequest {
+export interface SaveRequest {
   /** 'word' | 'google' - decides how the HTML is cleaned. */
   source: Source;
   /** Required when creating. */
@@ -55,7 +57,7 @@ interface SaveRequest {
  * @param value - Any value from the request body.
  * @returns true for a filled string. TypeScript then knows the value is a string.
  */
-function isFilledString(value: unknown): value is string {
+export function isFilledString(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
 }
 
@@ -68,7 +70,7 @@ function isFilledString(value: unknown): value is string {
  * @returns The field with a trimmed alias.
  * @throws {Error} 400 if it isn't an object, has no alias, or html isn't a string.
  */
-function validateField(field: unknown, index: number): FilledField {
+export function validateField(field: unknown, index: number): FilledField {
   if (typeof field !== 'object' || field === null) {
     throw httpError(400, `fields[${index}] must be an object`);
   }
@@ -91,7 +93,7 @@ function validateField(field: unknown, index: number): FilledField {
  * @returns The checked request. source defaults to 'word', parentId to null.
  * @throws {Error} 400 with a message that says what is wrong, e.g. a field filled twice.
  */
-function validateSaveRequest(body: unknown, isNew: boolean): SaveRequest {
+export function validateSaveRequest(body: unknown, isNew: boolean): SaveRequest {
   if (typeof body !== 'object' || body === null) {
     throw httpError(400, 'Request body must be a JSON object');
   }
@@ -154,7 +156,7 @@ function validateSaveRequest(body: unknown, isNew: boolean): SaveRequest {
  * @throws {Error} 400 for an invalid request or a field that can't be filled (errorHandler answers).
  * @throws {UmbracoApiError} If Umbraco refuses to create or publish.
  */
-async function createContent(req: express.Request, res: express.Response): Promise<void> {
+export async function createContent(req: express.Request, res: express.Response): Promise<void> {
   const request = validateSaveRequest(req.body, true);
   const documentTypeId = request.documentTypeId as string; // checked by validateSaveRequest
   const name = request.name as string; // checked by validateSaveRequest
@@ -185,7 +187,7 @@ async function createContent(req: express.Request, res: express.Response): Promi
  * @throws {Error} 400 for an invalid request or a field that can't be filled (errorHandler answers).
  * @throws {UmbracoApiError} If Umbraco refuses to save or publish.
  */
-async function updateContent(req: express.Request, res: express.Response): Promise<void> {
+export async function updateContent(req: express.Request, res: express.Response): Promise<void> {
   const request = validateSaveRequest(req.body, false);
   const id = String(req.params.id);
 

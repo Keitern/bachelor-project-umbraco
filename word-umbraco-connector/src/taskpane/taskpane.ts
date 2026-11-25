@@ -1,6 +1,8 @@
 /**
- * @file Responsible for the task pane itself: the three steps, buttons, and messages to the user.
+ * Responsible for the task pane itself: the three steps, buttons, and messages to the user.
  * Talks to the backend through api.ts and to Word through word.ts.
+ *
+ * @module
  */
 
 /* global document, HTMLElement, HTMLInputElement, HTMLButtonElement, HTMLTextAreaElement, Office */
@@ -38,7 +40,7 @@ const filled = new Map<string, MarkedText>();
  * @param id - The element's id in taskpane.html.
  * @returns The element.
  */
-function el<ElementType extends HTMLElement>(id: string): ElementType {
+export function el<ElementType extends HTMLElement>(id: string): ElementType {
   return document.getElementById(id) as ElementType;
 }
 
@@ -49,7 +51,7 @@ function el<ElementType extends HTMLElement>(id: string): ElementType {
  * @param message - The text to show ('' clears it).
  * @param kind - Decides the colour (see taskpane.css).
  */
-function showStatus(message: string, kind: "info" | "error" | "success"): void {
+export function showStatus(message: string, kind: "info" | "error" | "success"): void {
   const status = el("status");
   status.textContent = message;
   status.className = `status status--${kind}`;
@@ -62,7 +64,7 @@ function showStatus(message: string, kind: "info" | "error" | "success"): void {
  * @param err - What was thrown.
  * @returns The error's message, or "Something went wrong" if it isn't an Error.
  */
-function errorMessage(err: unknown): string {
+export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Something went wrong";
 }
 
@@ -77,7 +79,7 @@ function errorMessage(err: unknown): string {
  * @param text - The element's text (default '').
  * @returns The new element (not added to the page yet).
  */
-function make<TagName extends keyof HTMLElementTagNameMap>(
+export function make<TagName extends keyof HTMLElementTagNameMap>(
   tag: TagName,
   className: string,
   text = ""
@@ -95,7 +97,7 @@ function make<TagName extends keyof HTMLElementTagNameMap>(
  * @param step - Which step to show.
  * @param title - The text in the header.
  */
-function showStep(step: "types" | "pages" | "fields", title: string): void {
+export function showStep(step: "types" | "pages" | "fields", title: string): void {
   el("step-types").classList.toggle("hidden", step !== "types");
   el("step-pages").classList.toggle("hidden", step !== "pages");
   el("step-fields").classList.toggle("hidden", step !== "fields");
@@ -113,7 +115,12 @@ function showStep(step: "types" | "pages" | "fields", title: string): void {
  * @param onClick - What happens when the row is clicked.
  * @param extra - Optional small text on the right, e.g. the page's state.
  */
-function addRow(list: HTMLElement, label: string, onClick: () => void, extra?: string): void {
+export function addRow(
+  list: HTMLElement,
+  label: string,
+  onClick: () => void,
+  extra?: string
+): void {
   const item = document.createElement("li");
   const button = make("button", "", label);
   button.type = "button";
@@ -129,7 +136,7 @@ function addRow(list: HTMLElement, label: string, onClick: () => void, extra?: s
  * Step 1: lists the document types.
  * Use: when the pane opens, and the back arrow on step 2.
  */
-async function showDocumentTypes(): Promise<void> {
+export async function showDocumentTypes(): Promise<void> {
   showStep("types", "Choose Document Type");
   showStatus("Loading document types...", "info");
   const list = el("type-list");
@@ -155,7 +162,7 @@ async function showDocumentTypes(): Promise<void> {
  * Step 2: lists the pages of the chosen type, plus "Add new ...".
  * Use: after choosing a type, and the back arrow on step 3.
  */
-async function showPages(): Promise<void> {
+export async function showPages(): Promise<void> {
   if (!chosenType) {
     return;
   }
@@ -192,7 +199,7 @@ async function showPages(): Promise<void> {
  *
  * @param page - The chosen page, or null for a new page.
  */
-async function showFields(page: { id: string; name: string } | null): Promise<void> {
+export async function showFields(page: { id: string; name: string } | null): Promise<void> {
   if (!chosenType) {
     return;
   }
@@ -222,7 +229,7 @@ async function showFields(page: { id: string; name: string } | null): Promise<vo
  * Fields that can't be filled from text are greyed out, without a button.
  * Use: showFields, and fillField after a field was filled.
  */
-function renderFieldCards(): void {
+export function renderFieldCards(): void {
   const container = el("field-cards");
   container.innerHTML = "";
   for (const field of fields) {
@@ -264,7 +271,7 @@ function renderFieldCards(): void {
  *
  * @param field - The field to fill.
  */
-async function fillField(field: Field): Promise<void> {
+export async function fillField(field: Field): Promise<void> {
   try {
     const selection = await getSelectionHtml();
     if (selection.text.trim() === "") {
@@ -286,7 +293,7 @@ async function fillField(field: Field): Promise<void> {
  *
  * @param publish - true to publish right after saving.
  */
-async function save(publish: boolean): Promise<void> {
+export async function save(publish: boolean): Promise<void> {
   if (!chosenType) {
     return;
   }
@@ -339,7 +346,7 @@ async function save(publish: boolean): Promise<void> {
  * The back arrow: step 3 -> step 2 (unsaved filled fields are dropped), step 2 -> step 1.
  * Use: the back arrow in the header.
  */
-function goBack(): void {
+export function goBack(): void {
   if (!el("step-fields").classList.contains("hidden")) {
     filled.clear();
     showPages();
@@ -352,7 +359,7 @@ function goBack(): void {
  * Developer tool: shows Word's raw HTML of the selection, to collect test fixtures.
  * Use: the "Show selection" button in the collapsed developer section.
  */
-async function showSelection(): Promise<void> {
+export async function showSelection(): Promise<void> {
   const output = el<HTMLTextAreaElement>("selection-html");
   output.value = "";
   try {
