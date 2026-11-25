@@ -4,7 +4,7 @@ const VALID_ENV = {
   UMBRACO_URL: 'https://localhost:44363',
   UMBRACO_CLIENT_ID: 'umbraco-back-office-test',
   UMBRACO_CLIENT_SECRET: 'test-secret',
-  ALLOWED_ORIGIN: 'https://localhost:3000',
+  ALLOWED_ORIGIN: 'https://localhost:3000'
 };
 
 async function loadConfig() {
@@ -35,9 +35,9 @@ describe('config', () => {
 
   it('builds apiBase from UMBRACO_URL and removes a trailing slash', async () => {
     vi.stubEnv('UMBRACO_URL', 'https://localhost:44363/');
-  
+
     const config = await loadConfig();
-  
+
     expect(config.umbracoUrl).toBe('https://localhost:44363');
     expect(config.apiBase).toBe('https://localhost:44363/umbraco/management/api/v1');
     expect(config.apiBase).not.toContain('//umbraco');

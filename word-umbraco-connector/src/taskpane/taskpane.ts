@@ -1,11 +1,7 @@
-// Responsible for the task pane itself: the three steps, buttons, and messages to the user.
-// Talks to the backend through api.ts and to Word through word.ts.
-//
-// Flow (matches the Figma design):
-//   step 1: choose document type
-//   step 2: choose an existing page, or "Add new ..."
-//   step 3: one card per field. "Fill Field" takes the marked text in Word for that field
-//           (not saved yet). "Save as draft" / "Save & Publish" sends all filled fields at once.
+/**
+ * @file Responsible for the task pane itself: the three steps, buttons, and messages to the user.
+ * Talks to the backend through api.ts and to Word through word.ts.
+ */
 
 /* global document, HTMLElement, HTMLInputElement, HTMLButtonElement, HTMLTextAreaElement, Office */
 
@@ -22,41 +18,83 @@ import { getSelectionHtml } from "./word";
 import type { MarkedText } from "./word";
 
 // What the user has chosen so far
+/** The document type chosen in step 1. */
 let chosenType: DocumentType | null = null;
-let chosenPage: { id: string; name: string } | null = null; // null on step 3 = new page
+/** The page chosen in step 2. null on step 3 = new page. */
+let chosenPage: { id: string; name: string } | null = null;
+/** The fields of the chosen document type (step 3). */
 let fields: Field[] = [];
-let currentValues: Record<string, string> = {}; // saved content per field alias (previews)
-const filled = new Map<string, MarkedText>(); // marked text per field alias, not saved yet
+/** Saved content per field alias (previews). */
+let currentValues: Record<string, string> = {};
+/** Marked text per field alias, not saved yet. */
+const filled = new Map<string, MarkedText>();
 
-// Shortcut to an element in taskpane.html
-function el<T extends HTMLElement>(id: string): T {
-  return document.getElementById(id) as T;
+/**
+ * Shortcut to an element in taskpane.html.
+ * Use: everywhere in this file, instead of document.getElementById.
+ *
+ * @typeParam ElementType - What kind of element it is, e.g. el<HTMLInputElement>("new-name")
+ *   for an <input>.
+ * @param id - The element's id in taskpane.html.
+ * @returns The element.
+ */
+function el<ElementType extends HTMLElement>(id: string): ElementType {
+  return document.getElementById(id) as ElementType;
 }
 
-// Shows a message at the bottom. kind decides the colour (see taskpane.css).
+/**
+ * Shows a message at the bottom of the pane.
+ * Use: loading messages, errors and "Saved" messages.
+ *
+ * @param message - The text to show ('' clears it).
+ * @param kind - Decides the colour (see taskpane.css).
+ */
 function showStatus(message: string, kind: "info" | "error" | "success"): void {
   const status = el("status");
   status.textContent = message;
   status.className = `status status--${kind}`;
 }
 
+/**
+ * Gets a readable message out of anything that was thrown.
+ * Use: every catch block in this file, before showing the error.
+ *
+ * @param err - What was thrown.
+ * @returns The error's message, or "Something went wrong" if it isn't an Error.
+ */
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Something went wrong";
 }
 
-// Creates an element with a class and text. textContent (not innerHTML), so names can't inject HTML.
-function make<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
+/**
+ * Creates an element with a class and text. textContent (not innerHTML), so names can't inject HTML.
+ * Use: building the list rows and field cards.
+ *
+ * @typeParam TagName - The tag to create, e.g. "button". The return type follows it:
+ *   "button" gives a button.
+ * @param tag - The tag to create.
+ * @param className - CSS class(es), '' for none.
+ * @param text - The element's text (default '').
+ * @returns The new element (not added to the page yet).
+ */
+function make<TagName extends keyof HTMLElementTagNameMap>(
+  tag: TagName,
   className: string,
   text = ""
-): HTMLElementTagNameMap[K] {
+): HTMLElementTagNameMap[TagName] {
   const element = document.createElement(tag);
   element.className = className;
   element.textContent = text;
   return element;
 }
 
-// Shows one step, hides the others, and sets the header title and back arrow.
+/**
+ * Shows one step, hides the others, and sets the header title and back arrow.
+ * Use: at the start of showDocumentTypes, showPages and showFields.
+ *
+ * @param step - Which step to show.
+ * @param title - The text in the header.
+ */
 function showStep(step: "types" | "pages" | "fields", title: string): void {
   el("step-types").classList.toggle("hidden", step !== "types");
   el("step-pages").classList.toggle("hidden", step !== "pages");
@@ -66,7 +104,15 @@ function showStep(step: "types" | "pages" | "fields", title: string): void {
   document.querySelector(".header")?.classList.toggle("with-back", step !== "types");
 }
 
-// Adds a clickable row to a list (<ul>).
+/**
+ * Adds a clickable row to a list (<ul>).
+ * Use: the lists in step 1 (document types) and step 2 (pages).
+ *
+ * @param list - The <ul> to add to.
+ * @param label - The row's text.
+ * @param onClick - What happens when the row is clicked.
+ * @param extra - Optional small text on the right, e.g. the page's state.
+ */
 function addRow(list: HTMLElement, label: string, onClick: () => void, extra?: string): void {
   const item = document.createElement("li");
   const button = make("button", "", label);
@@ -79,7 +125,10 @@ function addRow(list: HTMLElement, label: string, onClick: () => void, extra?: s
   list.appendChild(item);
 }
 
-// Step 1: lists the document types. Use: when the pane opens, and the back arrow on step 2.
+/**
+ * Step 1: lists the document types.
+ * Use: when the pane opens, and the back arrow on step 2.
+ */
 async function showDocumentTypes(): Promise<void> {
   showStep("types", "Choose Document Type");
   showStatus("Loading document types...", "info");
@@ -102,8 +151,10 @@ async function showDocumentTypes(): Promise<void> {
   }
 }
 
-// Step 2: lists the pages of the chosen type, plus "Add new ...".
-// Use: after choosing a type, and the back arrow on step 3.
+/**
+ * Step 2: lists the pages of the chosen type, plus "Add new ...".
+ * Use: after choosing a type, and the back arrow on step 3.
+ */
 async function showPages(): Promise<void> {
   if (!chosenType) {
     return;
@@ -135,8 +186,12 @@ async function showPages(): Promise<void> {
   }
 }
 
-// Step 3: one card per field of the chosen type. page = null means "new page".
-// Use: after choosing a page or "Add new ...", and after creating a page.
+/**
+ * Step 3: one card per field of the chosen type. Clears any filled (unsaved) fields.
+ * Use: after choosing a page or "Add new ...", and after saving (to show the saved content).
+ *
+ * @param page - The chosen page, or null for a new page.
+ */
 async function showFields(page: { id: string; name: string } | null): Promise<void> {
   if (!chosenType) {
     return;
@@ -161,8 +216,12 @@ async function showFields(page: { id: string; name: string } | null): Promise<vo
   }
 }
 
-// Draws the field cards: name, "Fill Field" button and a grey preview line.
-// The preview shows the marked text if the field was filled, else the saved content.
+/**
+ * Draws the field cards: name, "Fill Field" button and a grey preview line.
+ * The preview shows the marked text if the field was filled, else the saved content.
+ * Fields that can't be filled from text are greyed out, without a button.
+ * Use: showFields, and fillField after a field was filled.
+ */
 function renderFieldCards(): void {
   const container = el("field-cards");
   container.innerHTML = "";
@@ -198,8 +257,13 @@ function renderFieldCards(): void {
   }
 }
 
-// Takes the marked text in Word and keeps it for one field (saved later with the save buttons).
-// Use: the "Fill Field" button on a card.
+/**
+ * Takes the marked text in Word and keeps it for one field (saved later with the save buttons).
+ * Filling the same field again replaces the earlier text.
+ * Use: the "Fill Field" button on a card.
+ *
+ * @param field - The field to fill.
+ */
 async function fillField(field: Field): Promise<void> {
   try {
     const selection = await getSelectionHtml();
@@ -215,8 +279,13 @@ async function fillField(field: Field): Promise<void> {
   }
 }
 
-// Sends all filled fields to Umbraco: updates the chosen page, or creates a new one.
-// Use: "Save as draft" (publish = false) and "Save & Publish" (publish = true).
+/**
+ * Sends all filled fields to Umbraco: updates the chosen page, or creates a new one.
+ * The buttons are disabled while sending, so the user can't save twice.
+ * Use: "Save as draft" (publish = false) and "Save & Publish" (publish = true).
+ *
+ * @param publish - true to publish right after saving.
+ */
 async function save(publish: boolean): Promise<void> {
   if (!chosenType) {
     return;
@@ -266,7 +335,10 @@ async function save(publish: boolean): Promise<void> {
   }
 }
 
-// The back arrow: step 3 -> step 2 (unsaved filled fields are dropped), step 2 -> step 1.
+/**
+ * The back arrow: step 3 -> step 2 (unsaved filled fields are dropped), step 2 -> step 1.
+ * Use: the back arrow in the header.
+ */
 function goBack(): void {
   if (!el("step-fields").classList.contains("hidden")) {
     filled.clear();
@@ -276,7 +348,10 @@ function goBack(): void {
   }
 }
 
-// Developer tool: shows Word's raw HTML of the selection, to collect test fixtures.
+/**
+ * Developer tool: shows Word's raw HTML of the selection, to collect test fixtures.
+ * Use: the "Show selection" button in the collapsed developer section.
+ */
 async function showSelection(): Promise<void> {
   const output = el<HTMLTextAreaElement>("selection-html");
   output.value = "";
@@ -288,7 +363,7 @@ async function showSelection(): Promise<void> {
   }
 }
 
-// Runs once Word has loaded the add-in.
+// Runs once Word has loaded the add-in: shows the pane, connects the buttons, and starts step 1.
 Office.onReady((info) => {
   if (info.host !== Office.HostType.Word) {
     return;

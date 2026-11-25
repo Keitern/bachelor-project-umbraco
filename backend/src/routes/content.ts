@@ -1,18 +1,20 @@
-// Responsible for "Save as draft" and "Save and publish": creating and updating pages.
-//
-// POST /api/content, PUT /api/content/:id
-// HTTP layer: read the request, validate it, call mapping + client, send the response.
-// index.ts mounts this router at /api/content, so the paths here start at '/'.
-//
-// Workflow (task pane in Word):
-//   1. User picks a document type, then either an existing node ("update") or "new".
-//   2. User marks text in Word, picks a field and clicks "Fill field".
-//      The add-in only collects these in a list - nothing is sent yet.
-//   3. User clicks "Save as draft" or "Save and publish". The add-in sends ALL filled
-//      fields in ONE request to the routes below, with publish: false / true.
-//
-// Express 5 passes errors from async handlers to errorHandler automatically,
-// so the handlers can just `throw` (no try/catch needed).
+/**
+ * @file Responsible for "Save as draft" and "Save & Publish": creating and updating pages.
+ *
+ * POST /api/content, PUT /api/content/:id
+ * HTTP layer: read the request, validate it, call mapping + client, send the response.
+ * index.ts mounts this router at /api/content, so the paths here start at '/'.
+ *
+ * Workflow (task pane in Word):
+ *   1. User picks a document type, then either an existing node ("update") or "new".
+ *   2. User marks text in Word, and clicks "Fill Field" on the field it belongs in.
+ *      The add-in only collects these in a list - nothing is sent yet.
+ *   3. User clicks "Save as draft" or "Save & Publish". The add-in sends ALL filled
+ *      fields in ONE request to the routes below, with publish: false / true.
+ *
+ * Express 5 passes errors from async handlers to errorHandler automatically,
+ * so the handlers can just `throw` (no try/catch needed).
+ */
 
 import express from 'express';
 import { httpError } from '../httpError.ts';
@@ -27,24 +29,45 @@ import {
   updateDocument
 } from '../umbraco/client.ts';
 
+/** Router with the save routes. Mounted at /api/content in index.ts. */
 export const contentRouter = express.Router();
 
-// What the add-in sends, after validateSaveRequest has checked it.
+/** What the add-in sends, after validateSaveRequest has checked it. */
 interface SaveRequest {
-  source: Source; // 'word' | 'google' - decides how the HTML is cleaned
-  documentTypeId?: string; // required when creating
-  parentId: string | null; // only used when creating, null = root
-  name?: string; // node name; required when creating, optional when updating
-  publish: boolean; // false = "Save as draft", true = "Save and publish"
-  fields: FilledField[]; // at least one: [{ alias: 'title', html: '<p>...</p>' }]
+  /** 'word' | 'google' - decides how the HTML is cleaned. */
+  source: Source;
+  /** Required when creating. */
+  documentTypeId?: string;
+  /** Only used when creating, null = root. */
+  parentId: string | null;
+  /** Node name; required when creating, optional when updating. */
+  name?: string;
+  /** false = "Save as draft", true = "Save & Publish". */
+  publish: boolean;
+  /** At least one: [{ alias: 'title', html: '<p>...</p>' }]. */
+  fields: FilledField[];
 }
 
-// true for a string that isn't empty or only spaces
+/**
+ * Checks that a value is a string that isn't empty or only spaces.
+ * Use: validateField and validateSaveRequest, for required text values.
+ *
+ * @param value - Any value from the request body.
+ * @returns true for a filled string. TypeScript then knows the value is a string.
+ */
 function isFilledString(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
 }
 
-// Checks one entry of `fields` and returns it typed. Throws 400 if it is invalid.
+/**
+ * Checks one entry of `fields` and returns it typed.
+ * Use: validateSaveRequest, once per filled field.
+ *
+ * @param field - One entry of the request's fields array.
+ * @param index - Its position, used in the error message, e.g. "fields[1].alias is required".
+ * @returns The field with a trimmed alias.
+ * @throws {Error} 400 if it isn't an object, has no alias, or html isn't a string.
+ */
 function validateField(field: unknown, index: number): FilledField {
   if (typeof field !== 'object' || field === null) {
     throw httpError(400, `fields[${index}] must be an object`);
@@ -59,8 +82,15 @@ function validateField(field: unknown, index: number): FilledField {
   return { alias: alias.trim(), html };
 }
 
-// Checks the JSON the add-in sends and returns it typed. Throws 400 if it is invalid.
-// Use: both save routes, first thing. isNew = true for create, false for update.
+/**
+ * Checks the JSON the add-in sends and returns it typed.
+ * Use: both save routes, first thing.
+ *
+ * @param body - req.body, as the add-in sent it.
+ * @param isNew - true for create (documentTypeId and name required), false for update.
+ * @returns The checked request. source defaults to 'word', parentId to null.
+ * @throws {Error} 400 with a message that says what is wrong, e.g. a field filled twice.
+ */
 function validateSaveRequest(body: unknown, isNew: boolean): SaveRequest {
   if (typeof body !== 'object' || body === null) {
     throw httpError(400, 'Request body must be a JSON object');
@@ -113,9 +143,17 @@ function validateSaveRequest(body: unknown, isNew: boolean): SaveRequest {
   };
 }
 
-// Creates a NEW node of the chosen document type with the filled fields, and publishes it if asked.
-// Use: POST /api/content, when the user chose "New" and clicked a save button.
-// Answers 201 { id, name, published }. The add-in stores the id in the Word document.
+/**
+ * Creates a NEW node of the chosen document type with the filled fields, and publishes it if asked.
+ * Use: POST /api/content, when the user chose "Add new ..." and clicked a save button.
+ *
+ * Answers 201 { id, name, published }.
+ *
+ * @param req - Body: { source, documentTypeId, parentId, name, publish, fields }.
+ * @param res - Used to send the answer.
+ * @throws {Error} 400 for an invalid request or a field that can't be filled (errorHandler answers).
+ * @throws {UmbracoApiError} If Umbraco refuses to create or publish.
+ */
 async function createContent(req: express.Request, res: express.Response): Promise<void> {
   const request = validateSaveRequest(req.body, true);
   const documentTypeId = request.documentTypeId as string; // checked by validateSaveRequest
@@ -135,10 +173,18 @@ async function createContent(req: express.Request, res: express.Response): Promi
   res.status(201).json({ id, name, published: request.publish });
 }
 
-// Updates an EXISTING node: the filled fields are replaced, all other fields keep their value.
-// Publishes it afterwards if asked.
-// Use: PUT /api/content/:id, when the user picked an existing node and clicked a save button.
-// Answers 200 { id, published }, or 404 if the node was deleted (the add-in forgets the id).
+/**
+ * Updates an EXISTING node: the filled fields are replaced, all other fields keep their value.
+ * Publishes it afterwards if asked.
+ * Use: PUT /api/content/:id, when the user picked an existing node and clicked a save button.
+ *
+ * Answers 200 { id, published }, or 404 if the node was deleted.
+ *
+ * @param req - Params: id. Body: { source, name?, publish, fields }.
+ * @param res - Used to send the answer.
+ * @throws {Error} 400 for an invalid request or a field that can't be filled (errorHandler answers).
+ * @throws {UmbracoApiError} If Umbraco refuses to save or publish.
+ */
 async function updateContent(req: express.Request, res: express.Response): Promise<void> {
   const request = validateSaveRequest(req.body, false);
   const id = String(req.params.id);

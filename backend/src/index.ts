@@ -1,7 +1,9 @@
-// Responsible for starting the backend: sets up the server, routes and error handling.
-
-// Starts the server (CORS for the Word add-in origin).
-// This is the entry point: `npm run dev:backend` runs this file.
+/**
+ * @file Responsible for starting the backend: sets up the server, routes and error handling.
+ *
+ * Starts the server (CORS for the Word add-in origin).
+ * This is the entry point: `npm run dev:backend` runs this file.
+ */
 
 import express from 'express';
 import type { Express, NextFunction } from 'express';
@@ -13,7 +15,12 @@ import { contentRouter } from './routes/content.ts';
 import https from 'node:https';
 import { getHttpsServerOptions } from 'office-addin-dev-certs';
 
-// Builds the Express app (middleware + routes + error handler) without starting it.
+/**
+ * Builds the Express app (middleware + routes + error handler) without starting it.
+ * Use: startServer() below, and tests that start the app on a random port.
+ *
+ * @returns The configured Express app.
+ */
 export function createApp(): Express {
   const app = express();
 
@@ -34,9 +41,18 @@ export function createApp(): Express {
   return app;
 }
 
-// Turns any thrown error into a JSON response, instead of Express' default HTML page.
-// Use: Express calls it automatically when a route throws errpr
-// Express only treats a middleware as an error handler when it has exactly 4 parameters,
+/**
+ * Turns any thrown error into a JSON response, instead of Express' default HTML page.
+ * Use: Express calls it automatically when a route throws an error.
+ *
+ * Express only treats a middleware as an error handler when it has exactly 4 parameters,
+ * so `next` is there even though it isn't used.
+ *
+ * @param err - Whatever was thrown: UmbracoApiError, an httpError, or anything else.
+ * @param req - The request that failed (not used).
+ * @param res - Used to send the error response.
+ * @param next - Not used, but required for Express to see this as an error handler.
+ */
 // eslint-disable-next-line max-params
 function errorHandler(
   err: unknown,
@@ -61,9 +77,13 @@ function errorHandler(
   res.status(500).json({ error: 'Internal server error' });
 }
 
-// Starts the app over HTTPS on config.port.
-// HTTPS because the Word add-in runs on https://localhost:3000, and a browser blocks calls
-// from an HTTPS page to an HTTP backend. Async because loading the certificate takes a moment.
+/**
+ * Starts the app over HTTPS on config.port.
+ * Use: once, when this file is run with `npm run dev:backend` / `npm run start:backend`.
+ *
+ * HTTPS because the Word add-in runs on https://localhost:3000, and a browser blocks calls
+ * from an HTTPS page to an HTTP backend. Async because loading the certificate takes a moment.
+ */
 async function startServer(): Promise<void> {
   // Same localhost certificate the Word add-in's dev server uses
   // (created by office-addin-dev-certs the first time `npm start` runs in the add-in).

@@ -1,0 +1,53 @@
+# CI pipeline: checks the backend on every push to main.
+# Runs on GitHub's servers (Ubuntu). Results: the "Actions" tab on GitHub, and a ✓ / ✗ next
+# to each commit.
+#
+# The same checks can be run locally before pushing:
+#   npm run lint
+#   npm run format:check
+#   npm run typecheck:backend
+#   npm test -- --run
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    name: Lint, format, typecheck and test
+    runs-on: ubuntu-latest
+
+    steps:
+      # Get the repository's code
+      - uses: actions/checkout@v4
+
+      # Same Node version as locally (24 LTS). cache: npm reuses downloaded packages between runs.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # Exact versions from package-lock.json (like the partner's `npm ci`)
+      - name: Install packages
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      # `!cancelled()` = run even if the step above failed, so one run shows ALL problems
+      - name: Prettier
+        if: ${{ !cancelled() }}
+        run: npm run format:check
+
+      # Checks the TypeScript types. Needed because Node and Vitest run .ts files WITHOUT
+      # checking types, so a type error would otherwise pass the other checks.
+      - name: Typecheck
+        if: ${{ !cancelled() }}
+        run: npm run typecheck:backend
+
+      # --run = run once and stop (without it, Vitest waits for file changes)
+      - name: Unit tests
+        if: ${{ !cancelled() }}
+        run: npm test -- --run

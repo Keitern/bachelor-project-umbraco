@@ -2,11 +2,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import eslintConfigPrettier from 'eslint-config-prettier/flat';
 
-const LINTED_FILES = [
-  'backend/src/**/*.ts',
-  'backend/tests/**/*.ts',
-  'eslint.config.js'
-];
+const LINTED_FILES = ['backend/src/**/*.ts', 'backend/tests/**/*.ts', 'eslint.config.js'];
 
 const rules = {
   'eqeqeq': ['error', 'always'], // Checks data type and content

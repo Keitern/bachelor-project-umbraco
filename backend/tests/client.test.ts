@@ -56,7 +56,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 // Makes fetch answer every call by looking at the URL (a fresh Response each time)
 function respondWith(handler: (url: string) => unknown): void {
-  fetchMock.mockImplementation(async (url: string) => jsonResponse(handler(url)));
+  fetchMock.mockImplementation(async (url: string) => {
+    return jsonResponse(handler(url));
+  });
 }
 
 // The (url, init) of the nth fetch call
@@ -119,7 +121,9 @@ describe('request (through the exported functions)', () => {
   });
 
   it('on 401 twice: throws instead of retrying forever', async () => {
-    fetchMock.mockImplementation(async () => new Response('nope', { status: 401 }));
+    fetchMock.mockImplementation(async () => {
+      return new Response('nope', { status: 401 });
+    });
 
     await expect(updateDocument('doc-1', UPDATE_BODY)).rejects.toMatchObject({ status: 401 });
 
@@ -162,7 +166,13 @@ describe('createDocument', () => {
 
 describe('getDocument', () => {
   it('sends GET /document/{id} and returns the document', async () => {
-    const doc = { id: 'doc-1', documentType: { id: 'type-1' }, template: null, variants: [], values: [] };
+    const doc = {
+      id: 'doc-1',
+      documentType: { id: 'type-1' },
+      template: null,
+      variants: [],
+      values: []
+    };
     fetchMock.mockResolvedValueOnce(jsonResponse(doc));
 
     const result = await getDocument('doc-1');
@@ -241,7 +251,11 @@ describe('getDocumentsByType', () => {
 
     const result = await getDocumentsByType('wanted');
 
-    expect(result.map((r) => r.id)).toEqual(['A', 'C']);
+    expect(
+      result.map((r) => {
+        return r.id;
+      })
+    ).toEqual(['A', 'C']);
   });
 
   it('stops after maxDepth levels', async () => {
@@ -254,22 +268,28 @@ describe('getDocumentsByType', () => {
 
     const result = await getDocumentsByType('wanted', 1);
 
-    expect(result.map((r) => r.id)).toEqual(['A']);
+    expect(
+      result.map((r) => {
+        return r.id;
+      })
+    ).toEqual(['A']);
     expect(fetchMock).toHaveBeenCalledTimes(1); // only the root level was fetched
   });
 });
 
 describe('getDocumentTypes', () => {
   it('returns document types from the root, and looks inside folders without returning the folders', async () => {
-    const type = (id: string, extra = {}) => ({
-      id,
-      name: id,
-      icon: 'icon',
-      isElement: false,
-      isFolder: false,
-      hasChildren: false,
-      ...extra
-    });
+    const type = (id: string, extra = {}) => {
+      return {
+        id,
+        name: id,
+        icon: 'icon',
+        isElement: false,
+        isFolder: false,
+        hasChildren: false,
+        ...extra
+      };
+    };
 
     respondWith((url) => {
       if (url.includes('/tree/document-type/root')) {
@@ -283,20 +303,42 @@ describe('getDocumentTypes', () => {
 
     const result = await getDocumentTypes();
 
-    expect(result.map((r) => r.id)).toEqual(['page', 'nested-page']);
+    expect(
+      result.map((r) => {
+        return r.id;
+      })
+    ).toEqual(['page', 'nested-page']);
   });
 
   it('leaves out element types', async () => {
-    respondWith(() =>
-      page([
-        { id: 'page', name: 'page', icon: 'i', isElement: false, isFolder: false, hasChildren: false },
-        { id: 'block', name: 'block', icon: 'i', isElement: true, isFolder: false, hasChildren: false }
-      ])
-    );
+    respondWith(() => {
+      return page([
+        {
+          id: 'page',
+          name: 'page',
+          icon: 'i',
+          isElement: false,
+          isFolder: false,
+          hasChildren: false
+        },
+        {
+          id: 'block',
+          name: 'block',
+          icon: 'i',
+          isElement: true,
+          isFolder: false,
+          hasChildren: false
+        }
+      ]);
+    });
 
     const result = await getDocumentTypes();
 
-    expect(result.map((r) => r.id)).toEqual(['page']);
+    expect(
+      result.map((r) => {
+        return r.id;
+      })
+    ).toEqual(['page']);
   });
 });
 
@@ -309,8 +351,18 @@ describe('getDocumentTypeProperties', () => {
         return {
           id: documentTypeId,
           properties: [
-            { alias: 'title', name: 'Title', dataType: { id: 'dt-text' }, validation: { mandatory: true } },
-            { alias: 'subtitle', name: 'Subtitle', dataType: { id: 'dt-text' }, validation: { mandatory: false } }
+            {
+              alias: 'title',
+              name: 'Title',
+              dataType: { id: 'dt-text' },
+              validation: { mandatory: true }
+            },
+            {
+              alias: 'subtitle',
+              name: 'Subtitle',
+              dataType: { id: 'dt-text' },
+              validation: { mandatory: false }
+            }
           ]
         };
       }
